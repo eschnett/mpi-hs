@@ -1,0 +1,79 @@
+# This YAML file describes your package. Stack will automatically generate a
+# Cabal file when you run `stack build`. See the hpack website for help with
+# this file: <https://github.com/sol/hpack>.
+name: mpi-hs
+version: '0.0.0.0'
+github: "eschnett/mpi-hs"
+license: Apache-2.0
+author: "Erik Schnetter"
+maintainer: "Erik Schnetter"
+# synopsis: A new Haskeleton package.
+# description: mpi-hs is a new Haskeleton package.
+# category: Other
+
+extra-source-files:
+  - LICENSE
+  - README.md
+  - package.yaml
+  - stack.yaml
+  - c/include/mpihs.h
+  - c/src/mpihs.c
+
+ghc-options:
+  - -Wall
+
+library:
+  dependencies:
+    - base
+  build-tools:
+    - c2hs
+  source-dirs:
+    - lib
+  c-sources:
+    - c/src/mpihs.c
+  include-dirs:
+    - c/include
+  extra-libraries:
+    - mpi
+
+executables:
+  mpi-hs:
+    source-dirs: src
+    main: Main.hs
+    dependencies:
+      - base
+      - mpi-hs
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+
+benchmarks:
+  mpi-hs-benchmarks:
+    source-dirs: bench
+    main: Main.hs
+    dependencies:
+      - base
+      - mpi-hs
+      - criterion
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+
+tests:
+  mpi-hs-test-suite:
+    source-dirs: test
+    main: Main.hs
+    dependencies:
+      - array
+      - base
+      # - bytestring
+      # - cereal
+      - mpi-hs
+      - tasty
+      - tasty-hspec
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
