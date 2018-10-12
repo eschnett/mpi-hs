@@ -60,29 +60,44 @@ module Control.Distributed.MPI
   , anySource
   , anyTag
 
+  , abort
+  , allgather
+  , allreduce
+  , alltoall
   , barrier
   , bcast
   , commCompare
   , commRank
   , commSize
+  , exscan
   , finalize
   , finalized
+  , gather
   , getCount
   , getLibraryVersion
   , getProcessorName
   , getVersion
+  , iallgather
+  , iallreduce
+  , ialltoall
   , ibarrier
   , ibcast
+  , iexscan
+  , igather
   , init
   , initThread
   , initialized
   , iprobe
   , irecv
   , ireduce
+  , iscan
+  , iscatter
   , isend
   , probe
   , recv
   , reduce
+  , scan
+  , scatter
   , send
   , test
   , wait
@@ -95,7 +110,7 @@ import Control.Monad (liftM)
 import Data.Coerce
 import Data.Ix
 import Data.Version
-import Foreign (Ptr, Storable(..), alloca, castPtr, toBool)
+import Foreign (Ptr, Storable(..), alloca, castPtr, toBool, with)
 import Foreign.C.String
 import Foreign.C.Types
 import Foreign.Marshal.Array
@@ -105,6 +120,18 @@ import System.IO.Unsafe (unsafePerformIO)
 default (Int)
 
 {#context prefix = "MPI" #}
+
+
+
+--------------------------------------------------------------------------------
+
+-- See GHC's includes/rts/Flags.h
+foreign import ccall "&rts_argc" rtsArgc :: Ptr CInt
+foreign import ccall "&rts_argv" rtsArgv :: Ptr (Ptr CString)
+argc :: CInt
+argv :: Ptr CString
+argc = unsafePerformIO $ peek rtsArgc
+argv = unsafePerformIO $ peek rtsArgv
 
 
 
@@ -229,133 +256,167 @@ unitTag = toTag ()
 
 --------------------------------------------------------------------------------
 
-foreign import ccall "&mpi_comm_self" mpiCommSelf :: Ptr Comm
+foreign import ccall "&hsmpi_comm_self" mpiCommSelf :: Ptr Comm
 commSelf :: Comm
 commSelf = unsafePerformIO $ peek mpiCommSelf
 
-foreign import ccall "&mpi_comm_world" mpiCommWorld :: Ptr Comm
+foreign import ccall "&hsmpi_comm_world" mpiCommWorld :: Ptr Comm
 commWorld :: Comm
 commWorld = unsafePerformIO $ peek mpiCommWorld
 
 
 
-foreign import ccall "&mpi_byte" mpiByte :: Ptr Datatype
+foreign import ccall "&hsmpi_byte" mpiByte :: Ptr Datatype
 datatypeByte :: Datatype
 datatypeByte = unsafePerformIO $ peek mpiByte
 
-foreign import ccall "&mpi_char" mpiChar :: Ptr Datatype
+foreign import ccall "&hsmpi_char" mpiChar :: Ptr Datatype
 datatypeChar :: Datatype
 datatypeChar = unsafePerformIO $ peek mpiChar
 
-foreign import ccall "&mpi_double" mpiDouble :: Ptr Datatype
+foreign import ccall "&hsmpi_double" mpiDouble :: Ptr Datatype
 datatypeDouble :: Datatype
 datatypeDouble = unsafePerformIO $ peek mpiDouble
 
-foreign import ccall "&mpi_float" mpiFloat :: Ptr Datatype
+foreign import ccall "&hsmpi_float" mpiFloat :: Ptr Datatype
 datatypeFloat :: Datatype
 datatypeFloat = unsafePerformIO $ peek mpiFloat
 
-foreign import ccall "&mpi_int" mpiInt :: Ptr Datatype
+foreign import ccall "&hsmpi_int" mpiInt :: Ptr Datatype
 datatypeInt :: Datatype
 datatypeInt = unsafePerformIO $ peek mpiInt
 
-foreign import ccall "&mpi_long" mpiLong :: Ptr Datatype
+foreign import ccall "&hsmpi_long" mpiLong :: Ptr Datatype
 datatypeLong :: Datatype
 datatypeLong = unsafePerformIO $ peek mpiLong
 
-foreign import ccall "&mpi_long_double" mpiLongDouble :: Ptr Datatype
+foreign import ccall "&hsmpi_long_double" mpiLongDouble :: Ptr Datatype
 datatypeLongDouble :: Datatype
 datatypeLongDouble = unsafePerformIO $ peek mpiLongDouble
 
-foreign import ccall "&mpi_long_long_int" mpiLongLong_Int :: Ptr Datatype
+foreign import ccall "&hsmpi_long_long_int" mpiLongLong_Int :: Ptr Datatype
 datatypeLongLongInt :: Datatype
 datatypeLongLongInt = unsafePerformIO $ peek mpiLongLong_Int
 
-foreign import ccall "&mpi_short" mpiShort :: Ptr Datatype
+foreign import ccall "&hsmpi_short" mpiShort :: Ptr Datatype
 datatypeShort :: Datatype
 datatypeShort = unsafePerformIO $ peek mpiShort
 
-foreign import ccall "&mpi_unsigned" mpiUnsigned :: Ptr Datatype
+foreign import ccall "&hsmpi_unsigned" mpiUnsigned :: Ptr Datatype
 datatypeUnsigned :: Datatype
 datatypeUnsigned = unsafePerformIO $ peek mpiUnsigned
 
-foreign import ccall "&mpi_unsigned_char" mpiUnsignedChar :: Ptr Datatype
+foreign import ccall "&hsmpi_unsigned_char" mpiUnsignedChar :: Ptr Datatype
 datatypeUnsignedChar :: Datatype
 datatypeUnsignedChar = unsafePerformIO $ peek mpiUnsignedChar
 
-foreign import ccall "&mpi_unsigned_long" mpiUnsignedLong :: Ptr Datatype
+foreign import ccall "&hsmpi_unsigned_long" mpiUnsignedLong :: Ptr Datatype
 datatypeUnsignedLong :: Datatype
 datatypeUnsignedLong = unsafePerformIO $ peek mpiUnsignedLong
 
-foreign import ccall "&mpi_unsigned_short" mpiUnsignedShort :: Ptr Datatype
+foreign import ccall "&hsmpi_unsigned_short" mpiUnsignedShort :: Ptr Datatype
 datatypeUnsignedShort :: Datatype
 datatypeUnsignedShort = unsafePerformIO $ peek mpiUnsignedShort
 
 
 
-foreign import ccall "&mpi_band" mpiBand :: Ptr Op
+foreign import ccall "&hsmpi_band" mpiBand :: Ptr Op
 opBand :: Op
 opBand = unsafePerformIO $ peek mpiBand
 
-foreign import ccall "&mpi_bor" mpiBor :: Ptr Op
+foreign import ccall "&hsmpi_bor" mpiBor :: Ptr Op
 opBor :: Op
 opBor = unsafePerformIO $ peek mpiBor
 
-foreign import ccall "&mpi_bxor" mpiBxor :: Ptr Op
+foreign import ccall "&hsmpi_bxor" mpiBxor :: Ptr Op
 opBxor :: Op
 opBxor = unsafePerformIO $ peek mpiBxor
 
-foreign import ccall "&mpi_land" mpiLand :: Ptr Op
+foreign import ccall "&hsmpi_land" mpiLand :: Ptr Op
 opLand :: Op
 opLand = unsafePerformIO $ peek mpiLand
 
-foreign import ccall "&mpi_lor" mpiLor :: Ptr Op
+foreign import ccall "&hsmpi_lor" mpiLor :: Ptr Op
 opLor :: Op
 opLor = unsafePerformIO $ peek mpiLor
 
-foreign import ccall "&mpi_lxor" mpiLxor :: Ptr Op
+foreign import ccall "&hsmpi_lxor" mpiLxor :: Ptr Op
 opLxor :: Op
 opLxor = unsafePerformIO $ peek mpiLxor
 
-foreign import ccall "&mpi_max" mpiMax :: Ptr Op
+foreign import ccall "&hsmpi_max" mpiMax :: Ptr Op
 opMax :: Op
 opMax = unsafePerformIO $ peek mpiMax
 
-foreign import ccall "&mpi_maxloc" mpiMaxloc :: Ptr Op
+foreign import ccall "&hsmpi_maxloc" mpiMaxloc :: Ptr Op
 opMaxloc :: Op
 opMaxloc = unsafePerformIO $ peek mpiMaxloc
 
-foreign import ccall "&mpi_min" mpiMin :: Ptr Op
+foreign import ccall "&hsmpi_min" mpiMin :: Ptr Op
 opMin :: Op
 opMin = unsafePerformIO $ peek mpiMin
 
-foreign import ccall "&mpi_minloc" mpiMinloc :: Ptr Op
+foreign import ccall "&hsmpi_minloc" mpiMinloc :: Ptr Op
 opMinloc :: Op
 opMinloc = unsafePerformIO $ peek mpiMinloc
 
-foreign import ccall "&mpi_prod" mpiProd :: Ptr Op
+foreign import ccall "&hsmpi_prod" mpiProd :: Ptr Op
 opProd :: Op
 opProd = unsafePerformIO $ peek mpiProd
 
-foreign import ccall "&mpi_sum" mpiSum :: Ptr Op
+foreign import ccall "&hsmpi_sum" mpiSum :: Ptr Op
 opSum :: Op
 opSum = unsafePerformIO $ peek mpiSum
 
 
 
-foreign import ccall "&mpi_any_source" mpiAnySource :: Ptr Rank
+foreign import ccall "&hsmpi_any_source" mpiAnySource :: Ptr Rank
 anySource :: Rank
 anySource = unsafePerformIO $ peek mpiAnySource
 
 
 
-foreign import ccall "&mpi_any_tag" mpiAnyTag :: Ptr Tag
+foreign import ccall "&hsmpi_any_tag" mpiAnyTag :: Ptr Tag
 anyTag :: Tag
 anyTag = unsafePerformIO $ peek mpiAnyTag
 
 
 
 --------------------------------------------------------------------------------
+
+{#fun unsafe Abort as ^
+    { getComm `Comm'
+    , fromIntegral `Int'
+    } -> `()' return*- #}
+
+{#fun unsafe Allgather as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getComm `Comm'
+    } -> `()' return*- #}
+
+{#fun unsafe Allreduce as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getComm `Comm'
+    } -> `()' return*- #}
+
+{#fun unsafe Alltoall as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getComm `Comm'
+    } -> `()' return*- #}
 
 {#fun unsafe Barrier as ^ {getComm `Comm'} -> `()' return*- #}
 
@@ -383,9 +444,29 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
     , alloca- `Rank' peekCoerce*
     } -> `()' return*- #}
 
+{#fun unsafe Exscan as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getComm `Comm'
+    } -> `()' return*- #}
+
 {#fun unsafe Finalize as ^ {} -> `()' return*- #}
 
 {#fun unsafe Finalized as ^ {alloca- `Bool' peekBool*} -> `()' return*- #}
+
+{#fun unsafe Gather as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , fromRank `Rank'
+    , getComm `Comm'
+    } -> `()' return*- #}
 
 {#fun unsafe Get_count as ^
     { getStatus `Status'
@@ -427,6 +508,38 @@ getVersion =
   do (major, minor) <- getVersion_
      return (makeVersion [major, minor])
 
+{#fun unsafe Iallgather as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
+
+{#fun unsafe Iallreduce as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
+
+{#fun unsafe Ialltoall as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
+
 {#fun unsafe Ibarrier as ^
     { getComm `Comm'
     , alloca- `Request' peekCast*
@@ -441,14 +554,47 @@ getVersion =
     , alloca- `Request' peekCast*
     } -> `()' return*- #}
 
+{#fun unsafe Iexscan as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
+
+{#fun unsafe Igather as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , fromRank `Rank'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
+
 {#fun unsafe Initialized as ^ {alloca- `Bool' peekBool*} -> `()' return*- #}
 
-{#fun unsafe mpihs_init as init {} -> `()' return*- #}
+{#fun unsafe Init as init_
+    { with* `CInt'
+    , with* `Ptr CString'
+    } -> `()' return*- #}
 
-{#fun unsafe mpihs_init_thread as initThread
-    { fromEnum `ThreadSupport'
+init :: IO ()
+init = init_ argc argv
+
+{#fun unsafe Init_thread as initThread_
+    { with* `CInt'
+    , with* `Ptr CString'
+    , fromEnum `ThreadSupport'
     , alloca- `ThreadSupport' peekEnum*
     } -> `()' return*- #}
+
+initThread :: ThreadSupport -> IO ThreadSupport
+initThread ts = initThread_ argc argv ts
 
 {#fun unsafe Iprobe as iprobe_
     { getRank `Rank'
@@ -478,6 +624,28 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     , getDatatype `Datatype'
     , getOp `Op'
     , getRank `Rank'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
+
+{#fun unsafe Iscan as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
+
+{#fun unsafe Iscatter as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , fromRank `Rank'
     , getComm `Comm'
     , alloca- `Request' peekCast*
     } -> `()' return*- #}
@@ -516,6 +684,26 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     , getDatatype `Datatype'
     , getOp `Op'
     , getRank `Rank'
+    , getComm `Comm'
+    } -> `()' return*- #}
+
+{#fun unsafe Scan as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getComm `Comm'
+    } -> `()' return*- #}
+
+{#fun unsafe Scatter as ^
+    { id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , fromRank `Rank'
     , getComm `Comm'
     } -> `()' return*- #}
 

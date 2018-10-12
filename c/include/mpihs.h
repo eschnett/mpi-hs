@@ -17,7 +17,4 @@ enum ThreadSupport {
   Multiple = MPI_THREAD_MULTIPLE
 };
 
-int mpihs_init(void);
-int mpihs_init_thread(int required, int *provided);
-
 #endif // #ifndef MPIHS_H

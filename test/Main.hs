@@ -52,6 +52,8 @@ main = do i0 <- MPI.initialized
           msg' :: CInt <- readArray buf' ()
           touchStorableArray buf'
           _ <- assert (msg == msg') $ return ()
+          _ <- assert (MPI.statusSource st == rank) $ return ()
+          _ <- assert (MPI.statusTag st == MPI.unitTag) $ return ()
 
           MPI.finalize
           i2 <- MPI.initialized
