@@ -22,6 +22,19 @@ const MPI_Datatype mpi_unsigned_char = MPI_UNSIGNED_CHAR;
 const MPI_Datatype mpi_unsigned_long = MPI_UNSIGNED_LONG;
 const MPI_Datatype mpi_unsigned_short = MPI_UNSIGNED_SHORT;
 
+const MPI_Op mpi_band = MPI_BAND;
+const MPI_Op mpi_bor = MPI_BOR;
+const MPI_Op mpi_bxor = MPI_BXOR;
+const MPI_Op mpi_land = MPI_LAND;
+const MPI_Op mpi_lor = MPI_LOR;
+const MPI_Op mpi_lxor = MPI_LXOR;
+const MPI_Op mpi_max = MPI_MAX;
+const MPI_Op mpi_maxloc = MPI_MAXLOC;
+const MPI_Op mpi_min = MPI_MIN;
+const MPI_Op mpi_minloc = MPI_MINLOC;
+const MPI_Op mpi_prod = MPI_PROD;
+const MPI_Op mpi_sum = MPI_SUM;
+
 
 
 // See GHC's includes/rts/Flags.h

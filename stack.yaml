@@ -60,8 +60,10 @@ packages:
 # Extra directories used by stack for building
 extra-include-dirs:
   - /opt/local/include/openmpi-mp
+  - /usr/lib/openmpi/include
 extra-lib-dirs:
   - /opt/local/lib/openmpi-mp
+  - /usr/lib/openmpi/lib
 
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor

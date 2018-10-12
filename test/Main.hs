@@ -31,22 +31,24 @@ main = do i0 <- MPI.initialized
           -- let msg = 42 :: CInt
           -- let buf = encode msg
           -- ptr <- unsafeUseAsCString buf return
-          -- MPI.send (castPtr ptr) 1 MPI.int rank MPI.unitTag MPI.commSelf
+          -- MPI.send (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag MPI.commSelf
           -- let buf' = encode (0 :: CInt)
           -- ptr' <- unsafeUseAsCString buf' return
-          -- st <- MPI.recv (castPtr ptr') 1 MPI.int rank MPI.unitTag MPI.commSelf
+          -- st <- MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag MPI.commSelf
           -- let Right msg' = decode buf'
           -- _ <- assert (msg == msg') $ return ()
 
           let msg = 42 :: CInt
           buf <- newArray @StorableArray ((), ()) msg
           ptr <- withStorableArray buf return
-          MPI.send (castPtr ptr) 1 MPI.int rank MPI.unitTag MPI.commSelf
+          MPI.send (castPtr ptr) 1 MPI.datatypeInt rank
+            MPI.unitTag MPI.commSelf
           touchStorableArray buf
 
           buf' <- newArray_ @StorableArray ((), ())
           ptr' <- withStorableArray buf' return
-          st <- MPI.recv (castPtr ptr') 1 MPI.int rank MPI.unitTag MPI.commSelf
+          st <- MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank
+            MPI.unitTag MPI.commSelf
           msg' :: CInt <- readArray buf' ()
           touchStorableArray buf'
           _ <- assert (msg == msg') $ return ()

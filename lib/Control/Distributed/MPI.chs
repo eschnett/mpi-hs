@@ -12,6 +12,7 @@ module Control.Distributed.MPI
   ( Comm(..)
   , ComparisonResult(..)
   , Datatype(..)
+  , Op(..)
   , Rank(..)
   , fromRank
   , rootRank
@@ -29,19 +30,33 @@ module Control.Distributed.MPI
 
   , commSelf
   , commWorld
-  , byte
-  , char
-  , double
-  , float
-  , int
-  , long
-  , longDouble
-  , longLongInt
-  , short
-  , unsigned
-  , unsignedChar
-  , unsignedLong
-  , unsignedShort
+  -- TODO: use a module for this namespace
+  , datatypeByte
+  , datatypeChar
+  , datatypeDouble
+  , datatypeFloat
+  , datatypeInt
+  , datatypeLong
+  , datatypeLongDouble
+  , datatypeLongLongInt
+  , datatypeShort
+  , datatypeUnsigned
+  , datatypeUnsignedChar
+  , datatypeUnsignedLong
+  , datatypeUnsignedShort
+  -- TODO: use a module for this namespace
+  , opBand
+  , opBor
+  , opBxor
+  , opLand
+  , opLor
+  , opLxor
+  , opMax
+  , opMaxloc
+  , opMin
+  , opMinloc
+  , opProd
+  , opSum
   , anySource
   , anyTag
 
@@ -63,9 +78,11 @@ module Control.Distributed.MPI
   , initialized
   , iprobe
   , irecv
+  , ireduce
   , isend
   , probe
   , recv
+  , reduce
   , send
   , test
   , wait
@@ -107,9 +124,6 @@ bool2maybe :: (Bool, a) -> Maybe a
 bool2maybe (False, _) = Nothing
 bool2maybe (True, x) = Just x
 
-discard :: a -> IO ()
-discard _ = return ()
-
 -- a Bool, probably represented as CInt
 peekBool :: (Integral a, Storable a) => Ptr a -> IO Bool
 peekBool  = liftM toBool . peek
@@ -132,8 +146,8 @@ peekInt = liftM fromIntegral . peek
 
 --------------------------------------------------------------------------------
 
-type MPIComm = {#type MPI_Comm #}
-newtype Comm = Comm { getComm :: MPIComm } deriving (Eq, Ord, Show)
+newtype Comm = Comm { getComm :: {#type MPI_Comm #} }
+  deriving (Eq, Ord, Show, Storable)
 
 
 
@@ -141,9 +155,13 @@ newtype Comm = Comm { getComm :: MPIComm } deriving (Eq, Ord, Show)
 
 
 
-type MPIDatatype = {#type MPI_Datatype #}
-newtype Datatype = Datatype { getDatatype :: MPIDatatype }
-  deriving (Eq, Ord, Show)
+newtype Datatype = Datatype { getDatatype :: {#type MPI_Datatype #} }
+  deriving (Eq, Ord, Show, Storable)
+
+
+
+newtype Op = Op { getOp :: {#type MPI_Op #} }
+  deriving (Eq, Ord, Show, Storable)
 
 
 
@@ -169,14 +187,12 @@ rootRank = toRank 0
 
 
 
-type MPIRequest = {#type MPI_Request #}
-newtype Request = Request { getRequest :: MPIRequest }
+newtype Request = Request { getRequest :: {#type MPI_Request #} }
   deriving (Eq, Ord, Show, Storable)
 
 
 
-type MPIStatus = {#type MPI_Status #}
-newtype Status = Status { getStatus :: MPIStatus }
+newtype Status = Status { getStatus :: {#type MPI_Status #} }
   deriving (Eq, Ord, Show, Storable)
 
 -- statusError :: Status -> Error
@@ -213,85 +229,135 @@ unitTag = toTag ()
 
 --------------------------------------------------------------------------------
 
-foreign import ccall "&mpi_comm_self" mpiCommSelf :: Ptr MPIComm
+foreign import ccall "&mpi_comm_self" mpiCommSelf :: Ptr Comm
 commSelf :: Comm
-commSelf = Comm <$> unsafePerformIO $ peek mpiCommSelf
+commSelf = unsafePerformIO $ peek mpiCommSelf
 
-foreign import ccall "&mpi_comm_world" mpiCommWorld :: Ptr MPIComm
+foreign import ccall "&mpi_comm_world" mpiCommWorld :: Ptr Comm
 commWorld :: Comm
-commWorld = Comm <$> unsafePerformIO $ peek mpiCommWorld
+commWorld = unsafePerformIO $ peek mpiCommWorld
 
 
 
-foreign import ccall "&mpi_byte" mpiByte :: Ptr MPIDatatype
-byte :: Datatype
-byte = Datatype <$> unsafePerformIO $ peek mpiByte
+foreign import ccall "&mpi_byte" mpiByte :: Ptr Datatype
+datatypeByte :: Datatype
+datatypeByte = unsafePerformIO $ peek mpiByte
 
-foreign import ccall "&mpi_char" mpiChar :: Ptr MPIDatatype
-char :: Datatype
-char = Datatype <$> unsafePerformIO $ peek mpiChar
+foreign import ccall "&mpi_char" mpiChar :: Ptr Datatype
+datatypeChar :: Datatype
+datatypeChar = unsafePerformIO $ peek mpiChar
 
-foreign import ccall "&mpi_double" mpiDouble :: Ptr MPIDatatype
-double :: Datatype
-double = Datatype <$> unsafePerformIO $ peek mpiDouble
+foreign import ccall "&mpi_double" mpiDouble :: Ptr Datatype
+datatypeDouble :: Datatype
+datatypeDouble = unsafePerformIO $ peek mpiDouble
 
-foreign import ccall "&mpi_float" mpiFloat :: Ptr MPIDatatype
-float :: Datatype
-float = Datatype <$> unsafePerformIO $ peek mpiFloat
+foreign import ccall "&mpi_float" mpiFloat :: Ptr Datatype
+datatypeFloat :: Datatype
+datatypeFloat = unsafePerformIO $ peek mpiFloat
 
-foreign import ccall "&mpi_int" mpiInt :: Ptr MPIDatatype
-int :: Datatype
-int = Datatype <$> unsafePerformIO $ peek mpiInt
+foreign import ccall "&mpi_int" mpiInt :: Ptr Datatype
+datatypeInt :: Datatype
+datatypeInt = unsafePerformIO $ peek mpiInt
 
-foreign import ccall "&mpi_long" mpiLong :: Ptr MPIDatatype
-long :: Datatype
-long = Datatype <$> unsafePerformIO $ peek mpiLong
+foreign import ccall "&mpi_long" mpiLong :: Ptr Datatype
+datatypeLong :: Datatype
+datatypeLong = unsafePerformIO $ peek mpiLong
 
-foreign import ccall "&mpi_long_double" mpiLongDouble :: Ptr MPIDatatype
-longDouble :: Datatype
-longDouble = Datatype <$> unsafePerformIO $ peek mpiLongDouble
+foreign import ccall "&mpi_long_double" mpiLongDouble :: Ptr Datatype
+datatypeLongDouble :: Datatype
+datatypeLongDouble = unsafePerformIO $ peek mpiLongDouble
 
-foreign import ccall "&mpi_long_long_int" mpiLongLong_Int :: Ptr MPIDatatype
-longLongInt :: Datatype
-longLongInt = Datatype <$> unsafePerformIO $ peek mpiLongLong_Int
+foreign import ccall "&mpi_long_long_int" mpiLongLong_Int :: Ptr Datatype
+datatypeLongLongInt :: Datatype
+datatypeLongLongInt = unsafePerformIO $ peek mpiLongLong_Int
 
-foreign import ccall "&mpi_short" mpiShort :: Ptr MPIDatatype
-short :: Datatype
-short = Datatype <$> unsafePerformIO $ peek mpiShort
+foreign import ccall "&mpi_short" mpiShort :: Ptr Datatype
+datatypeShort :: Datatype
+datatypeShort = unsafePerformIO $ peek mpiShort
 
-foreign import ccall "&mpi_unsigned" mpiUnsigned :: Ptr MPIDatatype
-unsigned :: Datatype
-unsigned = Datatype <$> unsafePerformIO $ peek mpiUnsigned
+foreign import ccall "&mpi_unsigned" mpiUnsigned :: Ptr Datatype
+datatypeUnsigned :: Datatype
+datatypeUnsigned = unsafePerformIO $ peek mpiUnsigned
 
-foreign import ccall "&mpi_unsigned_char" mpiUnsignedChar :: Ptr MPIDatatype
-unsignedChar :: Datatype
-unsignedChar = Datatype <$> unsafePerformIO $ peek mpiUnsignedChar
+foreign import ccall "&mpi_unsigned_char" mpiUnsignedChar :: Ptr Datatype
+datatypeUnsignedChar :: Datatype
+datatypeUnsignedChar = unsafePerformIO $ peek mpiUnsignedChar
 
-foreign import ccall "&mpi_unsigned_long" mpiUnsignedLong :: Ptr MPIDatatype
-unsignedLong :: Datatype
-unsignedLong = Datatype <$> unsafePerformIO $ peek mpiUnsignedLong
+foreign import ccall "&mpi_unsigned_long" mpiUnsignedLong :: Ptr Datatype
+datatypeUnsignedLong :: Datatype
+datatypeUnsignedLong = unsafePerformIO $ peek mpiUnsignedLong
 
-foreign import ccall "&mpi_unsigned_short" mpiUnsignedShort :: Ptr MPIDatatype
-unsignedShort :: Datatype
-unsignedShort = Datatype <$> unsafePerformIO $ peek mpiUnsignedShort
+foreign import ccall "&mpi_unsigned_short" mpiUnsignedShort :: Ptr Datatype
+datatypeUnsignedShort :: Datatype
+datatypeUnsignedShort = unsafePerformIO $ peek mpiUnsignedShort
 
 
 
-foreign import ccall "&mpi_any_source" mpiAnySource :: Ptr CInt
+foreign import ccall "&mpi_band" mpiBand :: Ptr Op
+opBand :: Op
+opBand = unsafePerformIO $ peek mpiBand
+
+foreign import ccall "&mpi_bor" mpiBor :: Ptr Op
+opBor :: Op
+opBor = unsafePerformIO $ peek mpiBor
+
+foreign import ccall "&mpi_bxor" mpiBxor :: Ptr Op
+opBxor :: Op
+opBxor = unsafePerformIO $ peek mpiBxor
+
+foreign import ccall "&mpi_land" mpiLand :: Ptr Op
+opLand :: Op
+opLand = unsafePerformIO $ peek mpiLand
+
+foreign import ccall "&mpi_lor" mpiLor :: Ptr Op
+opLor :: Op
+opLor = unsafePerformIO $ peek mpiLor
+
+foreign import ccall "&mpi_lxor" mpiLxor :: Ptr Op
+opLxor :: Op
+opLxor = unsafePerformIO $ peek mpiLxor
+
+foreign import ccall "&mpi_max" mpiMax :: Ptr Op
+opMax :: Op
+opMax = unsafePerformIO $ peek mpiMax
+
+foreign import ccall "&mpi_maxloc" mpiMaxloc :: Ptr Op
+opMaxloc :: Op
+opMaxloc = unsafePerformIO $ peek mpiMaxloc
+
+foreign import ccall "&mpi_min" mpiMin :: Ptr Op
+opMin :: Op
+opMin = unsafePerformIO $ peek mpiMin
+
+foreign import ccall "&mpi_minloc" mpiMinloc :: Ptr Op
+opMinloc :: Op
+opMinloc = unsafePerformIO $ peek mpiMinloc
+
+foreign import ccall "&mpi_prod" mpiProd :: Ptr Op
+opProd :: Op
+opProd = unsafePerformIO $ peek mpiProd
+
+foreign import ccall "&mpi_sum" mpiSum :: Ptr Op
+opSum :: Op
+opSum = unsafePerformIO $ peek mpiSum
+
+
+
+foreign import ccall "&mpi_any_source" mpiAnySource :: Ptr Rank
 anySource :: Rank
-anySource = Rank <$> unsafePerformIO $ peek mpiAnySource
+anySource = unsafePerformIO $ peek mpiAnySource
 
 
 
-foreign import ccall "&mpi_any_tag" mpiAnyTag :: Ptr CInt
+foreign import ccall "&mpi_any_tag" mpiAnyTag :: Ptr Tag
 anyTag :: Tag
-anyTag = Tag <$> unsafePerformIO $ peek mpiAnyTag
+anyTag = unsafePerformIO $ peek mpiAnyTag
 
 
 
 --------------------------------------------------------------------------------
 
-{#fun unsafe Barrier as ^ {getComm `Comm'} -> `()' discard*- #}
+{#fun unsafe Barrier as ^ {getComm `Comm'} -> `()' return*- #}
 
 {#fun unsafe Bcast as ^
     { id `Ptr ()'
@@ -299,38 +365,38 @@ anyTag = Tag <$> unsafePerformIO $ peek mpiAnyTag
     , getDatatype `Datatype'
     , getRank `Rank'
     , getComm `Comm'
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Comm_compare as ^
     { getComm `Comm'
     , getComm `Comm'
     , alloca- `ComparisonResult' peekEnum*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Comm_rank as ^
     { getComm `Comm'
     , alloca- `Rank' peekCoerce*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Comm_size as ^
     { getComm `Comm'
     , alloca- `Rank' peekCoerce*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
-{#fun unsafe Finalize as ^ {} -> `()' discard*- #}
+{#fun unsafe Finalize as ^ {} -> `()' return*- #}
 
-{#fun unsafe Finalized as ^ {alloca- `Bool' peekBool*} -> `()' discard*- #}
+{#fun unsafe Finalized as ^ {alloca- `Bool' peekBool*} -> `()' return*- #}
 
 {#fun unsafe Get_count as ^
     { getStatus `Status'
     , getDatatype `Datatype'
     , alloca- `Int' peekInt*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Get_library_version as getLibraryVersion_
     { id `CString'
     , alloca- `Int' peekInt*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 getLibraryVersion :: IO String
 getLibraryVersion =
@@ -342,7 +408,7 @@ getLibraryVersion =
 {#fun unsafe Get_processor_name as getProcessorName_
     { id `CString'
     , alloca- `Int' peekInt*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 getProcessorName :: IO String
 getProcessorName =
@@ -354,7 +420,7 @@ getProcessorName =
 {#fun unsafe Get_version as getVersion_
     { alloca- `Int' peekInt*
     , alloca- `Int' peekInt*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 getVersion :: IO Version
 getVersion =
@@ -364,7 +430,7 @@ getVersion =
 {#fun unsafe Ibarrier as ^
     { getComm `Comm'
     , alloca- `Request' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Ibcast as ^
     { id `Ptr ()'
@@ -373,16 +439,16 @@ getVersion =
     , getRank `Rank'
     , getComm `Comm'
     , alloca- `Request' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
-{#fun unsafe Initialized as ^ {alloca- `Bool' peekBool*} -> `()' discard*- #}
+{#fun unsafe Initialized as ^ {alloca- `Bool' peekBool*} -> `()' return*- #}
 
-{#fun unsafe mpihs_init as init {} -> `()' discard*- #}
+{#fun unsafe mpihs_init as init {} -> `()' return*- #}
 
 {#fun unsafe mpihs_init_thread as initThread
     { fromEnum `ThreadSupport'
     , alloca- `ThreadSupport' peekEnum*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Iprobe as iprobe_
     { getRank `Rank'
@@ -390,7 +456,7 @@ getVersion =
     , getComm `Comm'
     , alloca- `Bool' peekBool*
     , alloca- `Status' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 iprobe :: Rank -> Tag -> Comm -> IO (Maybe Status)
 iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
@@ -403,7 +469,18 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     , getTag `Tag'
     , getComm `Comm'
     , alloca- `Request' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
+
+{#fun unsafe Ireduce as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getRank `Rank'
+    , getComm `Comm'
+    , alloca- `Request' peekCast*
+    } -> `()' return*- #}
 
 {#fun unsafe Isend as ^
     { id `Ptr ()'
@@ -413,7 +490,14 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     , getTag `Tag'
     , getComm `Comm'
     , alloca- `Request' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
+
+{#fun unsafe Probe as ^
+    { getRank `Rank'
+    , getTag `Tag'
+    , getComm `Comm'
+    , alloca- `Status' peekCast*
+    } -> `()' return*- #}
 
 {#fun unsafe Recv as ^
     { id `Ptr ()'
@@ -423,14 +507,17 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     , getTag `Tag'
     , getComm `Comm'
     , alloca- `Status' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
-{#fun unsafe Probe as ^
-    { getRank `Rank'
-    , getTag `Tag'
+{#fun unsafe Reduce as ^
+    { id `Ptr ()'
+    , id `Ptr ()'
+    , fromIntegral `Int'
+    , getDatatype `Datatype'
+    , getOp `Op'
+    , getRank `Rank'
     , getComm `Comm'
-    , alloca- `Status' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Send as ^
     { id `Ptr ()'
@@ -439,18 +526,18 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     , getRank `Rank'
     , getTag `Tag'
     , getComm `Comm'
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Wait as ^
     { castPtr `Ptr Request'
     , alloca- `Status' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 {#fun unsafe Test as test_
     { castPtr `Ptr Request'
     , alloca- `Bool' peekBool*
     , alloca- `Status' peekCast*
-    } -> `()' discard*- #}
+    } -> `()' return*- #}
 
 test :: Ptr Request -> IO (Maybe Status)
 test req = bool2maybe <$> test_ req

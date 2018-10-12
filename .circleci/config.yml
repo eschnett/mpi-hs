@@ -10,13 +10,6 @@ jobs:
           key: cache-lts-12.12
       - run: sudo apt update
       - run: sudo apt -y install libopenmpi-dev openmpi-bin
-      - run: stack init
-      - run: |
-          {
-            echo
-            echo 'extra-include-dirs: [/usr/lib/openmpi/include]'
-            echo 'extra-lib-dirs: [/usr/lib/openmpi/lib]'
-          } >> stack.yaml
       - run: stack build --test --only-dependencies --no-terminal --system-ghc
       - save_cache:
           key: cache-lts-12.12
