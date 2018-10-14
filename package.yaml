@@ -68,12 +68,12 @@ tests:
     dependencies:
       - array
       - base
-      # - bytestring
-      # - cereal
       - mpi-hs
       - tasty
+      - tasty-hunit
       - tasty-hspec
-    ghc-options:
-      - -rtsopts
-      - -threaded
-      - -with-rtsopts=-N
+      - unix
+    ghc-options: []
+      # - -rtsopts
+      # - -threaded
+      # - -with-rtsopts=-N

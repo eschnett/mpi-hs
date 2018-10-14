@@ -3,61 +3,96 @@
 
 import Control.Exception
 import Data.Array.Storable
--- import Data.ByteString.Unsafe (unsafeUseAsCString)
--- import Data.Serialize
 import Foreign (castPtr)
 import Foreign.C.Types (CInt)
+import Test.Tasty
+import Test.Tasty.HUnit
 
 import qualified Control.Distributed.MPI as MPI
 
 main :: IO ()
-main = do i0 <- MPI.initialized
-          _ <- assert (i0 == False) $ return ()
-          ts <- MPI.initThread MPI.Multiple
-          _ <- assert (ts == MPI.Multiple) $ return ()
-          i1 <- MPI.initialized
-          _ <- assert (i1 == True) $ return ()
-          f1 <- MPI.finalized
-          _ <- assert (f1 == False) $ return ()
+main = bracket
+  MPI.init
+  (\_ -> MPI.finalize)
+  (\_ -> defaultMain tests)
 
-          rank0 <- MPI.commRank MPI.commSelf
-          _ <- assert (rank0 == 0) $ return ()
-          size1 <- MPI.commSize MPI.commSelf
-          _ <- assert (size1 == 1) $ return ()
-          rank <- MPI.commRank MPI.commWorld
-          size <- MPI.commSize MPI.commWorld
-          _ <- assert (rank >= 0 && rank < size) $ return ()
-          
-          -- let msg = 42 :: CInt
-          -- let buf = encode msg
-          -- ptr <- unsafeUseAsCString buf return
-          -- MPI.send (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag MPI.commSelf
-          -- let buf' = encode (0 :: CInt)
-          -- ptr' <- unsafeUseAsCString buf' return
-          -- st <- MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag MPI.commSelf
-          -- let Right msg' = decode buf'
-          -- _ <- assert (msg == msg') $ return ()
+tests :: TestTree
+tests = testGroup "MPI"
+  [ initialized
+  , rankSize
+  , sendRecv
+  ]
 
-          let msg = 42 :: CInt
-          buf <- newArray @StorableArray ((), ()) msg
-          ptr <- withStorableArray buf return
-          MPI.send (castPtr ptr) 1 MPI.datatypeInt rank
-            MPI.unitTag MPI.commSelf
-          touchStorableArray buf
 
-          buf' <- newArray_ @StorableArray ((), ())
-          ptr' <- withStorableArray buf' return
-          st <- MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank
-            MPI.unitTag MPI.commSelf
-          msg' :: CInt <- readArray buf' ()
-          touchStorableArray buf'
-          _ <- assert (msg == msg') $ return ()
-          _ <- assert (MPI.statusSource st == rank) $ return ()
-          _ <- assert (MPI.statusTag st == MPI.unitTag) $ return ()
 
-          MPI.finalize
-          i2 <- MPI.initialized
-          _ <- assert (i2 == True) $ return ()
-          f2 <- MPI.finalized
-          _ <- assert (f2 == True) $ return ()
-          return ()
+initialized :: TestTree
+initialized = testGroup "initialized"
+  [ testCase "initialized" $
+      do isInit <- MPI.initialized
+         isInit @?= True
+  , testCase "finalized" $
+      do isFini <- MPI.finalized
+         isFini @?= False
+  ]
+
+
+
+rankSize :: TestTree
+rankSize = testGroup "rank and size"
+  [ testCase "commSelf" $
+    do rank <- MPI.commRank MPI.commSelf
+       size <- MPI.commSize MPI.commSelf
+       rank == 0 && size == 1 @? ""
+  , testCase "commWorld" $
+    do rank <- MPI.commRank MPI.commWorld
+       size <- MPI.commSize MPI.commWorld
+       rank >= 0 && rank < size @? ""
+  ]
+
+
+
+sendRecv :: TestTree
+sendRecv = testGroup "send and recv"
+  [ testCase "send and recv" $
+    do rank <- MPI.commRank MPI.commSelf
+  
+       let msg = 42 :: CInt
+       buf <- newArray @StorableArray ((), ()) msg
+
+       ptr <- withStorableArray buf return
+       MPI.send (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag
+         MPI.commSelf
+       -- MPI.send (castPtr ptr) 1 (MPI.datatypeOf buf) rank MPI.unitTag
+       --   MPI.commSelf
+       touchStorableArray buf
+  
+       buf' <- newArray_ @StorableArray ((), ())
+       ptr' <- withStorableArray buf' return
+       st <- MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag
+         MPI.commSelf
+       msg' :: CInt <- readArray buf' ()
+
+       source <- MPI.statusSource st
+       tag <- MPI.statusTag st
+       (msg == msg' && source == rank && tag == MPI.unitTag) @? ""
+  , testCase "sendrecv" $
+    do rank <- MPI.commRank MPI.commSelf
+  
+       let msg = 42 :: CInt
+       buf <- newArray @StorableArray ((), ()) msg
+       ptr <- withStorableArray buf return
+       buf' <- newArray_ @StorableArray ((), ())
+       ptr' <- withStorableArray buf' return
+  
+       st <- MPI.sendrecv
+         (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag
+         (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag
+         MPI.commSelf
+       touchStorableArray buf
+  
+       msg' :: CInt <- readArray buf' ()
+  
+       source <- MPI.statusSource st
+       tag <- MPI.statusTag st
+       (msg == msg' && source == rank && tag == MPI.unitTag) @? ""
+  ]
