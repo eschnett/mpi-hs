@@ -187,5 +187,5 @@ collective = testGroup "collective"
                    MPI.rootRank MPI.commWorld
        touchStorableArray buf
        msg' :: CInt <- readArray buf' ()
-       msg' == 42 + rk @? ""
+       msg' == 43 + rk @? ""
   ]
