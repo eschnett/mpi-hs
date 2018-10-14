@@ -197,7 +197,7 @@ newtype Op = Op { getOp :: {#type MPI_Op#} }
 
 
 newtype Rank = Rank { getRank :: CInt }
-  deriving (Eq, Ord, Num, Storable)
+  deriving (Eq, Ord, Enum, Integral, Num, Real, Storable)
 
 instance Read Rank where
   readsPrec p = map (\(r, s) -> (Rank r, s)) . readsPrec p
