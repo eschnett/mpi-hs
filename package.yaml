@@ -73,7 +73,7 @@ tests:
       - tasty-hunit
       - tasty-hspec
       - unix
-    ghc-options: []
-      # - -rtsopts
-      # - -threaded
-      # - -with-rtsopts=-N
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
