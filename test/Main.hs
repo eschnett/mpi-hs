@@ -22,7 +22,7 @@ tests :: TestTree
 tests = testGroup "MPI"
   [ initialized
   , rankSize
-  , pointwise
+  , pointToPoint
   , collective
   ]
 
@@ -54,8 +54,8 @@ rankSize = testGroup "rank and size"
 
 
 
-pointwise :: TestTree
-pointwise = testGroup "pointwise"
+pointToPoint :: TestTree
+pointToPoint = testGroup "point-to-point"
   [ testCase "send and recv" $
     do rank <- MPI.commRank MPI.commSelf
   
