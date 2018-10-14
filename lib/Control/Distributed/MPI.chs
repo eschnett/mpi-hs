@@ -14,6 +14,9 @@
 module Control.Distributed.MPI
   ( Comm(..)
   , ComparisonResult(..)
+  , Count(..)
+  , fromCount
+  , toCount
   , Datatype(..)
   , Op(..)
   , Rank(..)
@@ -186,6 +189,23 @@ newtype Comm = Comm { getComm :: {#type MPI_Comm#} }
 
 
 
+newtype Count = Count CInt
+  deriving (Eq, Ord, Enum, Integral, Num, Real, Storable)
+
+instance Read Count where
+  readsPrec p = map (\(c, s) -> (Count c, s)) . readsPrec p
+
+instance Show Count where
+  showsPrec p (Count c) = showsPrec p c
+
+toCount :: Enum e => e -> Count
+toCount e = Count (fromIntegral (fromEnum e))
+
+fromCount :: Enum e => Count -> e
+fromCount (Count c) = toEnum (fromIntegral c)
+
+
+
 newtype Datatype = Datatype { getDatatype :: {#type MPI_Datatype#} }
   deriving (Eq, Ord, Show, Storable)
 
@@ -196,14 +216,14 @@ newtype Op = Op { getOp :: {#type MPI_Op#} }
 
 
 
-newtype Rank = Rank { getRank :: CInt }
+newtype Rank = Rank CInt
   deriving (Eq, Ord, Enum, Integral, Num, Real, Storable)
 
 instance Read Rank where
   readsPrec p = map (\(r, s) -> (Rank r, s)) . readsPrec p
 
 instance Show Rank where
-  showsPrec p = showsPrec p . getRank
+  showsPrec p (Rank r) = showsPrec p r
 
 instance Ix Rank where
   range (Rank rmin, Rank rmax) = Rank <$> [rmin..rmax]
@@ -214,10 +234,10 @@ instance Ix Rank where
   inRange (Rank rmin, Rank rmax) (Rank r) = rmin <= r && r <= rmax
 
 toRank :: Enum e => e -> Rank
-toRank = Rank . fromIntegral . fromEnum
+toRank e = Rank (fromIntegral (fromEnum e))
 
 fromRank :: Enum e => Rank -> e
-fromRank = toEnum . fromIntegral . getRank
+fromRank (Rank r) = toEnum (fromIntegral r)
 
 rootRank :: Rank
 rootRank = toRank 0
@@ -252,14 +272,14 @@ statusTag (Status fst) =
 
 
 
-newtype Tag = Tag { getTag :: CInt }
+newtype Tag = Tag CInt
   deriving (Eq, Ord, Read, Show, Num, Storable)
 
 toTag :: Enum e => e -> Tag
-toTag = Tag . fromIntegral . fromEnum
+toTag e = Tag (fromIntegral (fromEnum e))
 
 fromTag :: Enum e => Tag -> e
-fromTag = toEnum . fromIntegral . getTag
+fromTag (Tag t) = toEnum (fromIntegral t)
 
 unitTag :: Tag
 unitTag = toTag ()
@@ -442,10 +462,10 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
 
 {#fun Allgather as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getComm `Comm'
     } -> `()' return*-#}
@@ -453,7 +473,7 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
 {#fun Allreduce as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
     , getComm `Comm'
@@ -461,10 +481,10 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
 
 {#fun Alltoall as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getComm `Comm'
     } -> `()' return*-#}
@@ -473,9 +493,9 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
 
 {#fun Bcast as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
+    , fromRank `Rank'
     , getComm `Comm'
     } -> `()' return*-#}
 
@@ -498,7 +518,7 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
 {#fun Exscan as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
     , getComm `Comm'
@@ -510,10 +530,10 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
 
 {#fun Gather as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , fromRank `Rank'
     , getComm `Comm'
@@ -563,10 +583,10 @@ getVersion =
 
 {#fun Iallgather as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getComm `Comm'
     , +
@@ -575,7 +595,7 @@ getVersion =
 {#fun Iallreduce as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
     , getComm `Comm'
@@ -584,10 +604,10 @@ getVersion =
 
 {#fun Ialltoall as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getComm `Comm'
     , +
@@ -600,9 +620,9 @@ getVersion =
 
 {#fun Ibcast as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
+    , fromRank `Rank'
     , getComm `Comm'
     , +
     } -> `Request' return*#}
@@ -610,7 +630,7 @@ getVersion =
 {#fun Iexscan as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
     , getComm `Comm'
@@ -619,10 +639,10 @@ getVersion =
 
 {#fun Igather as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , fromRank `Rank'
     , getComm `Comm'
@@ -655,7 +675,7 @@ iprobe_ rank tag comm =
      withForeignPtr fst $ \st ->
        do alloca $ \flag ->
             do _ <- {#call Iprobe as iprobe__#}
-                    (getRank rank) (getTag tag) (getComm comm) flag st
+                    (fromRank rank) (fromTag tag) (getComm comm) flag st
                x <- peekBool flag
                let y = Status fst
                return (x, y)
@@ -665,10 +685,10 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 
 {#fun Irecv as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
-    , getTag `Tag'
+    , fromRank `Rank'
+    , fromTag `Tag'
     , getComm `Comm'
     , +
     } -> `Request' return*#}
@@ -676,10 +696,10 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 {#fun Ireduce as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
-    , getRank `Rank'
+    , fromRank `Rank'
     , getComm `Comm'
     , +
     } -> `Request' return*#}
@@ -687,7 +707,7 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 {#fun Iscan as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
     , getComm `Comm'
@@ -696,10 +716,10 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 
 {#fun Iscatter as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , fromRank `Rank'
     , getComm `Comm'
@@ -708,27 +728,27 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 
 {#fun Isend as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
-    , getTag `Tag'
+    , fromRank `Rank'
+    , fromTag `Tag'
     , getComm `Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Probe as ^
-    { getRank `Rank'
-    , getTag `Tag'
+    { fromRank `Rank'
+    , fromTag `Tag'
     , getComm `Comm'
     , +
     } -> `Status' return*#}
 
 {#fun Recv as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
-    , getTag `Tag'
+    , fromRank `Rank'
+    , fromTag `Tag'
     , getComm `Comm'
     , +
     } -> `Status' return*#}
@@ -736,17 +756,17 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 {#fun Reduce as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
-    , getRank `Rank'
+    , fromRank `Rank'
     , getComm `Comm'
     } -> `()' return*-#}
 
 {#fun Scan as ^
     { id `Ptr ()'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , getOp `Op'
     , getComm `Comm'
@@ -754,10 +774,10 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 
 {#fun Scatter as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
     , fromRank `Rank'
     , getComm `Comm'
@@ -765,24 +785,24 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
 
 {#fun Send as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
-    , getTag `Tag'
+    , fromRank `Rank'
+    , fromTag `Tag'
     , getComm `Comm'
     } -> `()' return*-#}
 
 {#fun Sendrecv as ^
     { id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
-    , getTag `Tag'
+    , fromRank `Rank'
+    , fromTag `Tag'
     , id `Ptr ()'
-    , fromIntegral `Int'
+    , fromCount `Count'
     , getDatatype `Datatype'
-    , getRank `Rank'
-    , getTag `Tag'
+    , fromRank `Rank'
+    , fromTag `Tag'
     , getComm `Comm'
     , +
     } -> `Status' return*#}
