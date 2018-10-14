@@ -14,7 +14,9 @@ main :: IO ()
 main = bracket
   MPI.init
   (\_ -> MPI.finalize)
-  (\_ -> defaultMain tests)
+  (\_ -> do rank <- MPI.commRank MPI.commWorld
+            putStrLn $ "rank: " ++ show rank
+            defaultMain tests)
 
 tests :: TestTree
 tests = testGroup "MPI"
@@ -111,7 +113,9 @@ collective = testGroup "collective"
   [ testCase "allgather" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
-       let msg = (42 + MPI.fromRank rank) :: CInt
+       let rk = MPI.fromRank rank
+       let sz = MPI.fromRank size
+       let msg = (42 + rk) :: CInt
        buf <- newArray @StorableArray ((), ()) msg
        ptr <- withStorableArray buf return
        buf' <- newArray_ @StorableArray (0, size-1)
@@ -120,14 +124,15 @@ collective = testGroup "collective"
                      (castPtr ptr') 1 MPI.datatypeInt
                      MPI.commWorld
        touchStorableArray buf
-       elems :: [CInt]  <- getElems buf'
-       let wantElems = [42 .. 42 + MPI.fromRank (size-1)]
-       elems == wantElems @? ""
+       msgs' :: [CInt]  <- getElems buf'
+       msgs' == [42 .. 42 + (sz-1)] @? ""
   , testCase "alltoall" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
-       let msg = (42 + MPI.fromRank rank :: CInt)
-       buf <- newArray @StorableArray (0, size-1) msg
+       let rk = MPI.fromRank rank
+       let sz = MPI.fromRank size
+       let msgs = [42 + sz * rk + i | i <- [0 .. sz-1]] :: [CInt]
+       buf <- newListArray @StorableArray (0, size-1) msgs
        ptr <- withStorableArray buf return
        buf' <- newArray_ @StorableArray (0, size-1)
        ptr' <- withStorableArray buf' return
@@ -135,45 +140,45 @@ collective = testGroup "collective"
                     (castPtr ptr') 1 MPI.datatypeInt
                     MPI.commWorld
        touchStorableArray buf
-       elems :: [CInt] <- getElems buf'
-       let wantElems =
-             [42 + MPI.fromRank rank .. 42 + MPI.fromRank (rank + size-1)]
-       elems == wantElems @? ""
+       msgs' :: [CInt] <- getElems buf'
+       msgs' == [42 + sz * i + rk | i <- [0 .. sz-1]] @? ""
   , testCase "barrier" $
     MPI.barrier MPI.commWorld
   , testCase "bcast" $
     do rank <- MPI.commRank MPI.commWorld
-       let msg = (42 + MPI.fromRank rank) :: CInt
+       let rk = MPI.fromRank rank
+       let msg = (42 + rk) :: CInt
        buf <- newArray @StorableArray ((), ()) msg
        ptr <- withStorableArray buf return
        MPI.bcast (castPtr ptr) 1 MPI.datatypeInt MPI.rootRank MPI.commWorld
        msg' :: CInt <- readArray buf ()
-       msg' == msg @? ""
+       msg' == 42 @? ""
   , testCase "gather" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
-       let msg = (42 + MPI.fromRank rank) :: CInt
+       let rk = MPI.fromRank rank
+       let sz = MPI.fromRank size
+       let isroot = rank == MPI.rootRank
+       let msg = (42 + rk) :: CInt
        buf <- newArray @StorableArray ((), ()) msg
        ptr <- withStorableArray buf return
-       buf' <- newArray_ @StorableArray
-               (0, if rank == MPI.rootRank then size-1 else -1)
+       buf' <- newArray_ @StorableArray (0, if isroot then size-1 else -1)
        ptr' <- withStorableArray buf' return
        MPI.gather (castPtr ptr) 1 MPI.datatypeInt
                   (castPtr ptr') 1 MPI.datatypeInt
                   MPI.rootRank MPI.commWorld
        touchStorableArray buf
-       elems :: [CInt] <-
-         if rank == MPI.rootRank then getElems buf' else return []
-       let wantElems = if rank == MPI.rootRank
-                       then [42 .. 42 + MPI.fromRank (size-1)]
-                       else []
-       elems == wantElems @? ""
+       msgs' :: [CInt] <- if isroot then getElems buf' else return []
+       msgs' == (if isroot then [42 .. 42 + sz-1] else []) @? ""
   , testCase "scatter" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
-       let msg = (42 + MPI.fromRank rank :: CInt)
-       buf <- newArray @StorableArray
-              (0, if rank == MPI.rootRank then size-1 else -1) msg
+       let rk = MPI.fromRank rank
+       let sz = MPI.fromRank size
+       let isroot = rank == MPI.rootRank
+       let msgs = [42 + i | i <- [0 .. sz-1]] :: [CInt]
+       buf <- newListArray @StorableArray
+              (0, if isroot then size-1 else -1) msgs
        ptr <- withStorableArray buf return
        buf' <- newArray_ @StorableArray ((), ())
        ptr' <- withStorableArray buf' return
@@ -182,5 +187,5 @@ collective = testGroup "collective"
                    MPI.rootRank MPI.commWorld
        touchStorableArray buf
        msg' :: CInt <- readArray buf' ()
-       msg' == 42 + MPI.fromRank MPI.rootRank @? ""
+       msg' == 42 + rk @? ""
   ]

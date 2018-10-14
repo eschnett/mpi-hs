@@ -16,3 +16,4 @@ jobs:
           paths:
             - ~/.stack
       - run: stack install --test --no-terminal --system-ghc
+      # - run: mpirun --mca btl self,vader -np 4 stack exec ./.stack-work/dist/x86_64-osx/Cabal-2.2.0.1/build/mpi-hs-test-suite/mpi-hs-test-suite
