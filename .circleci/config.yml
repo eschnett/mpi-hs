@@ -16,4 +16,4 @@ jobs:
           paths:
             - ~/.stack
       - run: stack install --haddock --test --no-run-tests --no-terminal --system-ghc
-      - run : mpirun --mca btl self,vader -np 3 stack exec $(stack path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite
+      - run : mpirun --allow-run-as-root --mca btl self,vader -np 3 stack exec $(stack path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite
