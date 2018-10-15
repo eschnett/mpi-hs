@@ -34,7 +34,9 @@ testCase name test =
        then do putStrLn $ "  " ++ name ++ "..."
                hFlush stdout
        else return ()
+     MPI.barrier MPI.commWorld
      test
+     MPI.barrier MPI.commWorld
 
 
 
@@ -197,6 +199,18 @@ collective = testGroup "collective"
        MPI.allgather buf 1 buf' 1 MPI.commWorld
        msgs' <- withForeignPtr buf' (peekArray sz)
        msgs' == [42 .. 42 + fromIntegral (sz-1)] @? ""
+  , testCase "allreduce" $
+    do rank <- MPI.commRank MPI.commWorld
+       size <- MPI.commSize MPI.commWorld
+       let rk = MPI.fromRank rank
+       let sz = MPI.fromRank size
+       let msg = 42 + rk
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+       buf' <- mallocForeignPtr @CInt
+       MPI.allreduce buf buf' 1 MPI.opSum MPI.commWorld
+       msg' <- withForeignPtr buf' peek
+       msg' == sum [42 .. 42 + (sz-1)] @? ""
   , testCase "alltoall" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
@@ -220,6 +234,16 @@ collective = testGroup "collective"
        MPI.bcast buf 1 MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf peek
        msg' == 42 @? ""
+  , testCase "exscan" $
+    do rank <- MPI.commRank MPI.commWorld
+       let rk = MPI.fromRank rank
+       let msg = 42 + rk
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+       buf' <- mallocForeignPtr @CInt
+       MPI.exscan buf buf' 1 MPI.opSum MPI.commWorld
+       msg' <- withForeignPtr buf' (if rank == 0 then \_ -> return 0 else peek)
+       msg' == sum [42 .. 42 + rk-1] @? ""
   , testCase "gather" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
@@ -232,7 +256,30 @@ collective = testGroup "collective"
        buf' <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
        MPI.gather buf 1 buf' 1 MPI.rootRank MPI.commWorld
        msgs' <- withForeignPtr buf' $ peekArray (if isroot then sz else 0)
-       msgs' == (if isroot then [42 .. 42 + fromIntegral sz-1] else []) @? ""
+       (if isroot then msgs' == [42 .. 42 + fromIntegral sz-1] else True) @? ""
+  , testCase "reduce" $
+    do rank <- MPI.commRank MPI.commWorld
+       size <- MPI.commSize MPI.commWorld
+       let rk = MPI.fromRank rank
+       let sz = MPI.fromRank size
+       let isroot = rank == MPI.rootRank
+       let msg = 42 + rk
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+       buf' <- mallocForeignPtr @CInt
+       MPI.reduce buf buf' 1 MPI.opSum MPI.rootRank MPI.commWorld
+       msg' <- withForeignPtr buf' $ if isroot then peek else \_ -> return 0
+       (if isroot then msg' == sum [42 .. 42 + sz-1] else True) @? ""
+  , testCase "scan" $
+    do rank <- MPI.commRank MPI.commWorld
+       let rk = MPI.fromRank rank
+       let msg = 42 + rk
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+       buf' <- mallocForeignPtr @CInt
+       MPI.scan buf buf' 1 MPI.opSum MPI.commWorld
+       msg' <- withForeignPtr buf' peek
+       msg' == sum [42 .. 42 + rk] @? ""
   , testCase "scatter" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld

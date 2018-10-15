@@ -71,7 +71,7 @@ module Control.Distributed.MPI
   , opMinloc
   , opProd
   , opSum
-  , HasOp(..)
+  -- , HasOp(..)
   , anySource
   , requestNull
   , statusIgnore
@@ -466,15 +466,15 @@ instance HasDatatype a => HasDatatype (Semigroup.Max a) where
 instance HasDatatype a => HasDatatype (Semigroup.Min a) where
   datatype = datatype @a
 
-class (Monoid a, HasDatatype a) => HasOp a where op :: Op
-instance (Num a, HasDatatype a) => HasOp (Monoid.Product a) where
-  op = opProd
-instance (Num a, HasDatatype a) => HasOp (Monoid.Sum a) where
-  op = opSum
-instance (Bounded a, Ord a, HasDatatype a) => HasOp (Semigroup.Max a) where
-  op = opMax
-instance (Bounded a, Ord a, HasDatatype a) => HasOp (Semigroup.Min a) where
-  op = opMin
+-- class (Monoid a, HasDatatype a) => HasOp a where op :: Op
+-- instance (Num a, HasDatatype a) => HasOp (Monoid.Product a) where
+--   op = opProd
+-- instance (Num a, HasDatatype a) => HasOp (Monoid.Sum a) where
+--   op = opSum
+-- instance (Bounded a, Ord a, HasDatatype a) => HasOp (Semigroup.Max a) where
+--   op = opMax
+-- instance (Bounded a, Ord a, HasDatatype a) => HasOp (Semigroup.Min a) where
+--   op = opMin
 
 
 
@@ -525,7 +525,7 @@ allgather sendbuf sendcount recvbuf recvcount comm =
                  (castPtr recvbuf') recvcount (datatype @b)
                  comm
 
-{#fun Allreduce as ^
+{#fun Allreduce as allreduceTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -533,6 +533,15 @@ allgather sendbuf sendcount recvbuf recvcount comm =
     , withOp* %`Op'
     , withComm* %`Comm'
     } -> `()' return*-#}
+
+allreduce :: forall a p q.
+             ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+             p a -> q a -> Count -> Op -> Comm -> IO ()
+allreduce sendbuf recvbuf count op comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  allreduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op
+                 comm
 
 {#fun Alltoall as alltoallTyped
     { id `Ptr ()'
@@ -587,7 +596,7 @@ bcast buf count root comm =
     , alloca- `Rank' peekCoerce*
     } -> `()' return*-#}
 
-{#fun Exscan as ^
+{#fun Exscan as exscanTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -595,6 +604,14 @@ bcast buf count root comm =
     , withOp* %`Op'
     , withComm* %`Comm'
     } -> `()' return*-#}
+
+exscan :: forall a p q.
+          ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+          p a -> q a -> Count -> Op -> Comm -> IO ()
+exscan sendbuf recvbuf count op comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  exscanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
 
 {#fun Finalize as ^ {} -> `()' return*-#}
 
@@ -854,7 +871,7 @@ recv recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
   recvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
 
-{#fun Reduce as ^
+{#fun Reduce as reduceTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -864,7 +881,16 @@ recv recvbuf recvcount recvrank recvtag comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-{#fun Scan as ^
+reduce :: forall a p q.
+          ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+          p a -> q a -> Count -> Op -> Rank -> Comm -> IO ()
+reduce sendbuf recvbuf count op rank comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  reduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op rank
+              comm
+
+{#fun Scan as scanTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -872,6 +898,14 @@ recv recvbuf recvcount recvrank recvtag comm =
     , withOp* %`Op'
     , withComm* %`Comm'
     } -> `()' return*-#}
+
+scan :: forall a p q.
+        ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+        p a -> q a -> Count -> Op -> Comm -> IO ()
+scan sendbuf recvbuf count op comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  scanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
 
 {#fun Scatter as scatterTyped
     { id `Ptr ()'
