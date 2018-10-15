@@ -15,6 +15,5 @@ jobs:
           key: cache-lts-12.12
           paths:
             - ~/.stack
-      # - run: stack install --test --no-terminal --system-ghc
-      - run: stack build --test --no-run-tests --no-terminal --system-ghc
+      - run: stack install --haddock --test --no-run-tests --no-terminal --system-ghc
       - run : mpirun --mca btl self,vader -np 3 stack exec $(stack path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite
