@@ -681,7 +681,7 @@ getVersion =
   do (major, minor) <- getVersion_
      return (makeVersion [major, minor])
 
-{#fun Iallgather as ^
+{#fun Iallgather as iallgatherTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -692,7 +692,18 @@ getVersion =
     , +
     } -> `Request' return*#}
 
-{#fun Iallreduce as ^
+iallgather :: forall a b p q.
+              ( HasPtr p, HasPtr q
+              , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+              p a -> Count -> q b -> Count -> Comm -> IO Request
+iallgather sendbuf sendcount recvbuf recvcount comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  iallgatherTyped (castPtr sendbuf') sendcount (datatype @a)
+                  (castPtr recvbuf') recvcount (datatype @b)
+                  comm
+
+{#fun Iallreduce as iallreduceTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -702,7 +713,16 @@ getVersion =
     , +
     } -> `Request' return*#}
 
-{#fun Ialltoall as ^
+iallreduce :: forall a p q.
+              ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+              p a -> q a -> Count -> Op -> Comm -> IO Request
+iallreduce sendbuf recvbuf count op comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  iallreduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op
+                  comm
+
+{#fun Ialltoall as ialltoallTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -712,13 +732,24 @@ getVersion =
     , withComm* %`Comm'
     , +
     } -> `Request' return*#}
+
+ialltoall :: forall a b p q.
+             ( HasPtr p, HasPtr q
+             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+             p a -> Count -> q b -> Count -> Comm -> IO Request
+ialltoall sendbuf sendcount recvbuf recvcount comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  ialltoallTyped (castPtr sendbuf') sendcount (datatype @a)
+                 (castPtr recvbuf') recvcount (datatype @b)
+                 comm
 
 {#fun Ibarrier as ^
     { withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
-{#fun Ibcast as ^
+{#fun Ibcast as ibcastTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -727,7 +758,13 @@ getVersion =
     , +
     } -> `Request' return*#}
 
-{#fun Iexscan as ^
+ibcast :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+          p a -> Count -> Rank -> Comm -> IO Request
+ibcast buf count root comm =
+  withPtr buf $ \buf' ->
+  ibcastTyped (castPtr buf') count (datatype @a) root comm
+
+{#fun Iexscan as iexscanTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -737,7 +774,15 @@ getVersion =
     , +
     } -> `Request' return*#}
 
-{#fun Igather as ^
+iexscan :: forall a p q.
+           ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+           p a -> q a -> Count -> Op -> Comm -> IO Request
+iexscan sendbuf recvbuf count op comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  iexscanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
+
+{#fun Igather as igatherTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -748,6 +793,17 @@ getVersion =
     , withComm* %`Comm'
     , +
     } -> `Request' return*#}
+
+igather :: forall a b p q.
+           ( HasPtr p, HasPtr q
+           , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+           p a -> Count -> q b -> Count -> Rank -> Comm -> IO Request
+igather sendbuf sendcount recvbuf recvcount root comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  igatherTyped (castPtr sendbuf') sendcount (datatype @a)
+               (castPtr recvbuf') recvcount (datatype @b)
+               root comm
 
 {#fun unsafe Initialized as ^ {alloca- `Bool' peekBool*} -> `()' return*-#}
 
@@ -799,7 +855,7 @@ irecv recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
   irecvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
 
-{#fun Ireduce as ^
+{#fun Ireduce as ireduceTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -810,7 +866,16 @@ irecv recvbuf recvcount recvrank recvtag comm =
     , +
     } -> `Request' return*#}
 
-{#fun Iscan as ^
+ireduce :: forall a p q.
+           ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+           p a -> q a -> Count -> Op -> Rank -> Comm -> IO Request
+ireduce sendbuf recvbuf count op rank comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  ireduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op rank
+               comm
+
+{#fun Iscan as iscanTyped
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
@@ -820,7 +885,15 @@ irecv recvbuf recvcount recvrank recvtag comm =
     , +
     } -> `Request' return*#}
 
-{#fun Iscatter as ^
+iscan :: forall a p q.
+         ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+         p a -> q a -> Count -> Op -> Comm -> IO Request
+iscan sendbuf recvbuf count op comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  iscanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
+
+{#fun Iscatter as iscatterTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -831,6 +904,17 @@ irecv recvbuf recvcount recvrank recvtag comm =
     , withComm* %`Comm'
     , +
     } -> `Request' return*#}
+
+iscatter :: forall a b p q.
+            ( HasPtr p, HasPtr q
+            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+            p a -> Count -> q b -> Count -> Rank -> Comm -> IO Request
+iscatter sendbuf sendcount recvbuf recvcount root comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  iscatterTyped (castPtr sendbuf') sendcount (datatype @a)
+                (castPtr recvbuf') recvcount (datatype @b)
+                root comm
 
 {#fun Isend as isendTyped
     { id `Ptr ()'
