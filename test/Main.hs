@@ -2,27 +2,81 @@
 {-# LANGUAGE TypeApplications #-}
 
 import Control.Exception
-import Data.Array.Storable
-import Foreign (castPtr)
-import Foreign.C.Types (CInt)
-import Test.Tasty
-import Test.Tasty.HUnit
+import Foreign
+import Foreign.C.Types
+import System.Exit
+import System.IO
+-- import Test.Tasty
+-- import Test.Tasty.HUnit
 
 import qualified Control.Distributed.MPI as MPI
+
+
+
+--------------------------------------------------------------------------------
+
+infix 1 @?
+(@?) :: Bool -> String -> IO ()
+x @? _ = if not x then exitFailure else return ()
+
+infix 1 @?=
+(@?=) :: Eq a => a -> a -> IO ()
+x @?= y = x == y @? ""
+
+
+
+type TestTree = IO ()
+
+testCase :: String -> IO () -> TestTree
+testCase name test =
+  do rank <- MPI.commRank MPI.commWorld
+     if rank == 0
+       then do putStrLn $ "  " ++ name ++ "..."
+               hFlush stdout
+       else return ()
+     test
+
+
+
+testGroup :: String -> [TestTree] -> TestTree
+testGroup name cases =
+  do rank <- MPI.commRank MPI.commWorld
+     if rank == 0
+       then do putStrLn $ name ++ ":"
+               hFlush stdout
+       else return ()
+     sequence_ cases
+
+
+
+defaultMain :: TestTree -> IO ()
+defaultMain tree =
+  do rank <- MPI.commRank MPI.commWorld
+     size <- MPI.commSize MPI.commWorld
+     if rank == 0
+       then do putStrLn $ "MPI Tests: running on " ++ show size ++ " processes"
+               hFlush stdout
+       else return ()
+     tree
+
+
+
+--------------------------------------------------------------------------------
+
+
 
 main :: IO ()
 main = bracket
   MPI.init
   (\_ -> MPI.finalize)
-  (\_ -> do rank <- MPI.commRank MPI.commWorld
-            putStrLn $ "rank: " ++ show rank
-            defaultMain tests)
+  (\_ -> defaultMain tests)
 
 tests :: TestTree
 tests = testGroup "MPI"
   [ initialized
   , rankSize
   , pointToPoint
+  , pointToPointNonBlocking
   , collective
   ]
 
@@ -57,53 +111,84 @@ rankSize = testGroup "rank and size"
 pointToPoint :: TestTree
 pointToPoint = testGroup "point-to-point"
   [ testCase "send and recv" $
-    do rank <- MPI.commRank MPI.commSelf
-  
-       let msg = 42 :: CInt
-       buf <- newArray @StorableArray ((), ()) msg
+    do rank <- MPI.commRank MPI.commWorld
 
-       ptr <- withStorableArray buf return
-       MPI.send (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag
-         MPI.commSelf
-       -- MPI.send (castPtr ptr) 1 (MPI.datatypeOf buf) rank MPI.unitTag
-       --   MPI.commSelf
-       touchStorableArray buf
-  
-       buf' <- newArray_ @StorableArray ((), ())
-       ptr' <- withStorableArray buf' return
-       st <- MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag
-         MPI.commSelf
-       msg' :: CInt <- readArray buf' ()
+       let msg = 42
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
 
-       source <- MPI.statusSource st
-       tag <- MPI.statusTag st
+       withForeignPtr buf $ \ptr ->
+         MPI.send (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag MPI.commWorld
+
+       buf' <- mallocForeignPtr @CInt
+       st <- withForeignPtr buf' $ \ptr' ->
+         MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag
+           MPI.commWorld
+       msg' <- withForeignPtr buf' peek
+
+       source <- MPI.getSource st
+       tag <- MPI.getTag st
        count <- MPI.getCount st MPI.datatypeInt
-       (msg == msg' && source == rank && tag == MPI.unitTag && count == 1) @? ""
+       (msg' == msg && source == rank && tag == MPI.unitTag && count == 1) @? ""
   , testCase "sendrecv" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
 
-       let msg = (42 + MPI.fromRank rank) :: CInt
-       buf <- newArray @StorableArray ((), ()) msg
-       ptr <- withStorableArray buf return
-       buf' <- newArray_ @StorableArray ((), ())
-       ptr' <- withStorableArray buf' return
+       let msg = 42 + MPI.fromRank rank
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
 
-       st <- MPI.sendrecv
-         (castPtr ptr) 1 MPI.datatypeInt ((rank + 1) `mod` size) MPI.unitTag
-         (castPtr ptr') 1 MPI.datatypeInt ((rank - 1) `mod` size) MPI.unitTag
-         MPI.commWorld
-       touchStorableArray buf
+       buf' <- mallocForeignPtr @CInt
 
-       msg' :: CInt <- readArray buf' ()
+       st <- withForeignPtr buf $ \ptr ->
+         withForeignPtr buf' $ \ptr' ->
+           MPI.sendrecv
+             (castPtr ptr) 1 MPI.datatypeInt ((rank + 1) `mod` size) MPI.unitTag
+             (castPtr ptr') 1 MPI.datatypeInt ((rank - 1) `mod` size)
+               MPI.unitTag
+             MPI.commWorld
 
-       source <- MPI.statusSource st
-       tag <- MPI.statusTag st
+       msg' <- withForeignPtr buf' peek
+
+       source <- MPI.getSource st
+       tag <- MPI.getTag st
        count <- MPI.getCount st MPI.datatypeInt
        (msg' == 42 + MPI.fromRank ((rank - 1) `mod` size) &&
         source == (rank - 1) `mod` size &&
         tag == MPI.unitTag &&
         count == 1) @? ""
+  ]
+
+
+
+pointToPointNonBlocking :: TestTree
+pointToPointNonBlocking = testGroup "point-to-point non-blocking"
+  [ testCase "send and recv" $
+    do rank <- MPI.commRank MPI.commWorld
+
+       let msg = 42
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+
+       req <- withForeignPtr buf $ \ptr ->
+         MPI.isend (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag
+           MPI.commWorld
+
+       buf' <- mallocForeignPtr @CInt
+       req' <- withForeignPtr buf' $ \ptr' ->
+         MPI.irecv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag
+           MPI.commWorld
+
+       MPI.wait_ req
+       st <- MPI.wait req'
+
+       touchForeignPtr buf
+       msg' <- withForeignPtr buf' peek
+
+       source <- MPI.getSource st
+       tag <- MPI.getTag st
+       count <- MPI.getCount st MPI.datatypeInt
+       (msg' == msg && source == rank && tag == MPI.unitTag && count == 1) @? ""
   ]
 
 
@@ -115,43 +200,44 @@ collective = testGroup "collective"
        size <- MPI.commSize MPI.commWorld
        let rk = MPI.fromRank rank
        let sz = MPI.fromRank size
-       let msg = (42 + rk) :: CInt
-       buf <- newArray @StorableArray ((), ()) msg
-       ptr <- withStorableArray buf return
-       buf' <- newArray_ @StorableArray (0, size-1)
-       ptr' <- withStorableArray buf' return
-       MPI.allgather (castPtr ptr) 1 MPI.datatypeInt
-                     (castPtr ptr') 1 MPI.datatypeInt
-                     MPI.commWorld
-       touchStorableArray buf
-       msgs' :: [CInt]  <- getElems buf'
-       msgs' == [42 .. 42 + (sz-1)] @? ""
+       let msg = 42 + rk
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+       buf' <- mallocForeignPtrArray @CInt sz
+       withForeignPtr buf $ \ptr ->
+         withForeignPtr buf' $ \ptr' ->
+           MPI.allgather (castPtr ptr) 1 MPI.datatypeInt
+                         (castPtr ptr') 1 MPI.datatypeInt
+                         MPI.commWorld
+       msgs' <- withForeignPtr buf' (peekArray sz)
+       msgs' == [42 .. 42 + fromIntegral (sz-1)] @? ""
   , testCase "alltoall" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
        let rk = MPI.fromRank rank
        let sz = MPI.fromRank size
-       let msgs = [42 + sz * rk + i | i <- [0 .. sz-1]] :: [CInt]
-       buf <- newListArray @StorableArray (0, size-1) msgs
-       ptr <- withStorableArray buf return
-       buf' <- newArray_ @StorableArray (0, size-1)
-       ptr' <- withStorableArray buf' return
-       MPI.alltoall (castPtr ptr) 1 MPI.datatypeInt
-                    (castPtr ptr') 1 MPI.datatypeInt
-                    MPI.commWorld
-       touchStorableArray buf
-       msgs' :: [CInt] <- getElems buf'
-       msgs' == [42 + sz * i + rk | i <- [0 .. sz-1]] @? ""
+       let msgs = fromIntegral <$> [42 + sz * rk + i | i <- [0 .. sz-1]]
+       buf <- mallocForeignPtrArray @CInt sz
+       withForeignPtr buf $ \ptr -> pokeArray ptr msgs
+       buf' <- mallocForeignPtrArray @CInt sz
+       withForeignPtr buf $ \ptr ->
+         withForeignPtr buf' $ \ptr' ->
+           MPI.alltoall (castPtr ptr) 1 MPI.datatypeInt
+                        (castPtr ptr') 1 MPI.datatypeInt
+                        MPI.commWorld
+       msgs' <- withForeignPtr buf' (peekArray sz)
+       msgs' == (fromIntegral <$> [42 + sz * i + rk | i <- [0 .. sz-1]]) @? ""
   , testCase "barrier" $
     MPI.barrier MPI.commWorld
   , testCase "bcast" $
     do rank <- MPI.commRank MPI.commWorld
        let rk = MPI.fromRank rank
-       let msg = (42 + rk) :: CInt
-       buf <- newArray @StorableArray ((), ()) msg
-       ptr <- withStorableArray buf return
-       MPI.bcast (castPtr ptr) 1 MPI.datatypeInt MPI.rootRank MPI.commWorld
-       msg' :: CInt <- readArray buf ()
+       let msg = 42 + rk
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+       withForeignPtr buf $ \ptr ->
+         MPI.bcast (castPtr ptr) 1 MPI.datatypeInt MPI.rootRank MPI.commWorld
+       msg' <- withForeignPtr buf peek
        msg' == 42 @? ""
   , testCase "gather" $
     do rank <- MPI.commRank MPI.commWorld
@@ -159,33 +245,32 @@ collective = testGroup "collective"
        let rk = MPI.fromRank rank
        let sz = MPI.fromRank size
        let isroot = rank == MPI.rootRank
-       let msg = (42 + rk) :: CInt
-       buf <- newArray @StorableArray ((), ()) msg
-       ptr <- withStorableArray buf return
-       buf' <- newArray_ @StorableArray (0, if isroot then size-1 else -1)
-       ptr' <- withStorableArray buf' return
-       MPI.gather (castPtr ptr) 1 MPI.datatypeInt
-                  (castPtr ptr') 1 MPI.datatypeInt
-                  MPI.rootRank MPI.commWorld
-       touchStorableArray buf
-       msgs' :: [CInt] <- if isroot then getElems buf' else return []
-       msgs' == (if isroot then [42 .. 42 + sz-1] else []) @? ""
+       let msg = 42 + rk
+       buf <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr -> poke ptr msg
+       buf' <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
+       withForeignPtr buf $ \ptr ->
+         withForeignPtr buf' $ \ptr' ->
+           MPI.gather (castPtr ptr) 1 MPI.datatypeInt
+                      (castPtr ptr') 1 MPI.datatypeInt
+                      MPI.rootRank MPI.commWorld
+       msgs' <- withForeignPtr buf' $ peekArray (if isroot then sz else 0)
+       msgs' == (if isroot then [42 .. 42 + fromIntegral sz-1] else []) @? ""
   , testCase "scatter" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld
        let rk = MPI.fromRank rank
        let sz = MPI.fromRank size
        let isroot = rank == MPI.rootRank
-       let msgs = [42 + i | i <- [0 .. sz-1]] :: [CInt]
-       buf <- newListArray @StorableArray
-              (0, if isroot then size-1 else -1) msgs
-       ptr <- withStorableArray buf return
-       buf' <- newArray_ @StorableArray ((), ())
-       ptr' <- withStorableArray buf' return
-       MPI.scatter (castPtr ptr) 1 MPI.datatypeInt
-                   (castPtr ptr') 1 MPI.datatypeInt
-                   MPI.rootRank MPI.commWorld
-       touchStorableArray buf
-       msg' :: CInt <- readArray buf' ()
+       let msgs = [42 + fromIntegral i | i <- [0 .. sz-1]]
+       buf <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
+       withForeignPtr buf $ \ptr -> pokeArray ptr msgs
+       buf' <- mallocForeignPtr @CInt
+       withForeignPtr buf $ \ptr ->
+         withForeignPtr buf' $ \ptr' ->
+           MPI.scatter (castPtr ptr) 1 MPI.datatypeInt
+                       (castPtr ptr') 1 MPI.datatypeInt
+                       MPI.rootRank MPI.commWorld
+       msg' <- withForeignPtr buf' peek
        msg' == 42 + rk @? ""
   ]

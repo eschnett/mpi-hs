@@ -1,7 +1,9 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -26,17 +28,19 @@ module Control.Distributed.MPI
   , Request(..)
   , Status(..)
   --, statusError
-  , statusSource
-  , statusTag
+  , getSource
+  , getTag
   , Tag(..)
   , fromTag
   , toTag
   , unitTag
   , ThreadSupport(..)
 
+  , commNull
   , commSelf
   , commWorld
   -- TODO: use a module for this namespace
+  , datatypeNull
   , datatypeByte
   , datatypeChar
   , datatypeDouble
@@ -53,6 +57,7 @@ module Control.Distributed.MPI
   , HasDatatype(..)
   , datatypeOf
   -- TODO: use a module for this namespace
+  , opNull
   , opBand
   , opBor
   , opBxor
@@ -67,6 +72,8 @@ module Control.Distributed.MPI
   , opSum
   , HasOp(..)
   , anySource
+  , requestNull
+  , statusIgnore
   , anyTag
 
   , abort
@@ -109,8 +116,10 @@ module Control.Distributed.MPI
   , scatter
   , send
   , sendrecv
+  , sendrecv'
   , test
   , wait
+  , wait_
   ) where
 
 import Prelude hiding (fromEnum, fst, init, toEnum)
@@ -180,8 +189,11 @@ peekInt = liftM fromIntegral . peek
 
 --------------------------------------------------------------------------------
 
-newtype Comm = Comm { getComm :: {#type MPI_Comm#} }
-  deriving (Eq, Ord, Show, Storable)
+{#pointer *MPI_Comm as Comm foreign newtype#}
+
+deriving instance Eq Comm
+deriving instance Ord Comm
+deriving instance Show Comm
 
 
 
@@ -206,13 +218,19 @@ fromCount (Count c) = toEnum (fromIntegral c)
 
 
 
-newtype Datatype = Datatype { getDatatype :: {#type MPI_Datatype#} }
-  deriving (Eq, Ord, Show, Storable)
+{#pointer *MPI_Datatype as Datatype foreign newtype#}
+
+deriving instance Eq Datatype
+deriving instance Ord Datatype
+deriving instance Show Datatype
 
 
 
-newtype Op = Op { getOp :: {#type MPI_Op#} }
-  deriving (Eq, Ord, Show, Storable)
+{#pointer *MPI_Op as Op foreign newtype#}
+
+deriving instance Eq Op
+deriving instance Ord Op
+deriving instance Show Op
 
 
 
@@ -262,12 +280,12 @@ deriving instance Show Status
 -- statusError (Status mst) =
 --   Error $ {#get MPI_Status.MPI_ERROR#} mst
 
-statusSource :: Status -> IO Rank
-statusSource (Status fst) =
+getSource :: Status -> IO Rank
+getSource (Status fst) =
   withForeignPtr fst (\pst -> Rank <$> {#get MPI_Status->MPI_SOURCE#} pst)
 
-statusTag :: Status -> IO Tag
-statusTag (Status fst) =
+getTag :: Status -> IO Tag
+getTag (Status fst) =
   withForeignPtr fst (\pst -> Tag <$> {#get MPI_Status->MPI_TAG#} pst)
 
 
@@ -292,67 +310,27 @@ unitTag = toTag ()
 
 --------------------------------------------------------------------------------
 
-foreign import ccall "&hsmpi_comm_self" mpiCommSelf :: Ptr Comm
-commSelf :: Comm
-commSelf = unsafePerformIO $ peek mpiCommSelf
-
-foreign import ccall "&hsmpi_comm_world" mpiCommWorld :: Ptr Comm
-commWorld :: Comm
-commWorld = unsafePerformIO $ peek mpiCommWorld
+{#fun pure mpihs_get_comm_null as commNull {+} -> `Comm'#}
+{#fun pure mpihs_get_comm_self as commSelf {+} -> `Comm'#}
+{#fun pure mpihs_get_comm_world as commWorld {+} -> `Comm'#}
 
 
 
-foreign import ccall "&hsmpi_byte" mpiByte :: Ptr Datatype
-datatypeByte :: Datatype
-datatypeByte = unsafePerformIO $ peek mpiByte
+{#fun pure mpihs_get_datatype_null as datatypeNull {+} -> `Datatype'#}
 
-foreign import ccall "&hsmpi_char" mpiChar :: Ptr Datatype
-datatypeChar :: Datatype
-datatypeChar = unsafePerformIO $ peek mpiChar
-
-foreign import ccall "&hsmpi_double" mpiDouble :: Ptr Datatype
-datatypeDouble :: Datatype
-datatypeDouble = unsafePerformIO $ peek mpiDouble
-
-foreign import ccall "&hsmpi_float" mpiFloat :: Ptr Datatype
-datatypeFloat :: Datatype
-datatypeFloat = unsafePerformIO $ peek mpiFloat
-
-foreign import ccall "&hsmpi_int" mpiInt :: Ptr Datatype
-datatypeInt :: Datatype
-datatypeInt = unsafePerformIO $ peek mpiInt
-
-foreign import ccall "&hsmpi_long" mpiLong :: Ptr Datatype
-datatypeLong :: Datatype
-datatypeLong = unsafePerformIO $ peek mpiLong
-
-foreign import ccall "&hsmpi_long_double" mpiLongDouble :: Ptr Datatype
-datatypeLongDouble :: Datatype
-datatypeLongDouble = unsafePerformIO $ peek mpiLongDouble
-
-foreign import ccall "&hsmpi_long_long_int" mpiLongLong_Int :: Ptr Datatype
-datatypeLongLongInt :: Datatype
-datatypeLongLongInt = unsafePerformIO $ peek mpiLongLong_Int
-
-foreign import ccall "&hsmpi_short" mpiShort :: Ptr Datatype
-datatypeShort :: Datatype
-datatypeShort = unsafePerformIO $ peek mpiShort
-
-foreign import ccall "&hsmpi_unsigned" mpiUnsigned :: Ptr Datatype
-datatypeUnsigned :: Datatype
-datatypeUnsigned = unsafePerformIO $ peek mpiUnsigned
-
-foreign import ccall "&hsmpi_unsigned_char" mpiUnsignedChar :: Ptr Datatype
-datatypeUnsignedChar :: Datatype
-datatypeUnsignedChar = unsafePerformIO $ peek mpiUnsignedChar
-
-foreign import ccall "&hsmpi_unsigned_long" mpiUnsignedLong :: Ptr Datatype
-datatypeUnsignedLong :: Datatype
-datatypeUnsignedLong = unsafePerformIO $ peek mpiUnsignedLong
-
-foreign import ccall "&hsmpi_unsigned_short" mpiUnsignedShort :: Ptr Datatype
-datatypeUnsignedShort :: Datatype
-datatypeUnsignedShort = unsafePerformIO $ peek mpiUnsignedShort
+{#fun pure mpihs_get_byte as datatypeByte {+} -> `Datatype'#}
+{#fun pure mpihs_get_char as datatypeChar {+} -> `Datatype'#}
+{#fun pure mpihs_get_double as datatypeDouble {+} -> `Datatype'#}
+{#fun pure mpihs_get_float as datatypeFloat {+} -> `Datatype'#}
+{#fun pure mpihs_get_int as datatypeInt {+} -> `Datatype'#}
+{#fun pure mpihs_get_long as datatypeLong {+} -> `Datatype'#}
+{#fun pure mpihs_get_long_double as datatypeLongDouble {+} -> `Datatype'#}
+{#fun pure mpihs_get_long_long_int as datatypeLongLongInt {+} -> `Datatype'#}
+{#fun pure mpihs_get_short as datatypeShort {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned as datatypeUnsigned {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned_char as datatypeUnsignedChar {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned_long as datatypeUnsignedLong {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned_short as datatypeUnsignedShort {+} -> `Datatype'#}
 
 class HasDatatype a where datatype :: Datatype
 instance HasDatatype CChar where datatype = datatypeChar
@@ -367,58 +345,103 @@ instance HasDatatype CUInt where datatype = datatypeUnsigned
 instance HasDatatype CULong where datatype = datatypeUnsignedLong
 instance HasDatatype CUShort where datatype = datatypeUnsignedShort
 
+-- instance Coercible Int CChar => HasDatatype Int where
+--   datatype = datatype @CChar
+-- instance Coercible Int CShort => HasDatatype Int where
+--   datatype = datatype @CShort
+-- instance Coercible Int CInt => HasDatatype Int where
+--   datatype = datatype @CInt
+-- instance Coercible Int CLong => HasDatatype Int where
+--   datatype = datatype @CLong
+-- instance Coercible Int CLLong => HasDatatype Int where
+--   datatype = datatype @CLLong
+
+-- instance HasDatatype Int where
+--   datatype = if | coercible @Int @CChar -> datatype @CChar
+--                 | coercible @Int @CShort -> datatype @CShort
+--                 | coercible @Int @CInt -> datatype @CInt
+--                 | coercible @Int @CLong -> datatype @CLong
+--                 | coercible @Int @CLLong -> datatype @CLLong
+-- instance HasDatatype Int8 where
+--   datatype = if | coercible @Int @CChar -> datatype @CChar
+--                 | coercible @Int @CShort -> datatype @CShort
+--                 | coercible @Int @CInt -> datatype @CInt
+--                 | coercible @Int @CLong -> datatype @CLong
+--                 | coercible @Int @CLLong -> datatype @CLLong
+-- instance HasDatatype Int16 where
+--   datatype = if | coercible @Int @CChar -> datatype @CChar
+--                 | coercible @Int @CShort -> datatype @CShort
+--                 | coercible @Int @CInt -> datatype @CInt
+--                 | coercible @Int @CLong -> datatype @CLong
+--                 | coercible @Int @CLLong -> datatype @CLLong
+-- instance HasDatatype Int32 where
+--   datatype = if | coercible @Int @CChar -> datatype @CChar
+--                 | coercible @Int @CShort -> datatype @CShort
+--                 | coercible @Int @CInt -> datatype @CInt
+--                 | coercible @Int @CLong -> datatype @CLong
+--                 | coercible @Int @CLLong -> datatype @CLLong
+-- instance HasDatatype Int64 where
+--   datatype = if | coercible @Int @CChar -> datatype @CChar
+--                 | coercible @Int @CShort -> datatype @CShort
+--                 | coercible @Int @CInt -> datatype @CInt
+--                 | coercible @Int @CLong -> datatype @CLong
+--                 | coercible @Int @CLLong -> datatype @CLLong
+-- instance HasDatatype Word where
+--   datatype = if | coercible @Int @CUChar -> datatype @CUChar
+--                 | coercible @Int @CUShort -> datatype @CUShort
+--                 | coercible @Int @CUInt -> datatype @CUInt
+--                 | coercible @Int @CULong -> datatype @CULong
+--                 -- | coercible @Int @CULLong -> datatype @CULLong
+-- instance HasDatatype Word8 where
+--   datatype = if | coercible @Int @CUChar -> datatype @CUChar
+--                 | coercible @Int @CUShort -> datatype @CUShort
+--                 | coercible @Int @CUInt -> datatype @CUInt
+--                 | coercible @Int @CULong -> datatype @CULong
+--                 -- | coercible @Int @CULLong -> datatype @CULLong
+-- instance HasDatatype Word16 where
+--   datatype = if | coercible @Int @CUChar -> datatype @CUChar
+--                 | coercible @Int @CUShort -> datatype @CUShort
+--                 | coercible @Int @CUInt -> datatype @CUInt
+--                 | coercible @Int @CULong -> datatype @CULong
+--                 -- | coercible @Int @CULLong -> datatype @CULLong
+-- instance HasDatatype Word32 where
+--   datatype = if | coercible @Int @CUChar -> datatype @CUChar
+--                 | coercible @Int @CUShort -> datatype @CUShort
+--                 | coercible @Int @CUInt -> datatype @CUInt
+--                 | coercible @Int @CULong -> datatype @CULong
+--                 -- | coercible @Int @CULLong -> datatype @CULLong
+-- instance HasDatatype Word64 where
+--   datatype = if | coercible @Int @CUChar -> datatype @CUChar
+--                 | coercible @Int @CUShort -> datatype @CUShort
+--                 | coercible @Int @CUInt -> datatype @CUInt
+--                 | coercible @Int @CULong -> datatype @CULong
+--                 -- | coercible @Int @CULLong -> datatype @CULLong
+-- instance HasDatatype Float where
+--   datatype = if | coercible @Float @CFloat -> datatype @CFloat
+--                 | coercible @Float @CDouble -> datatype @CDouble
+-- instance HasDatatype Double where
+--   datatype = if | coercible @Double @CFloat -> datatype @CFloat
+--                 | coercible @Double @CDouble -> datatype @CDouble
+
 datatypeOf :: forall a p. HasDatatype a => p a -> Datatype
 datatypeOf _ = datatype @a
 
 
 
-foreign import ccall "&hsmpi_band" mpiBand :: Ptr Op
-opBand :: Op
-opBand = unsafePerformIO $ peek mpiBand
+{#fun pure mpihs_get_op_null as opNull {+} -> `Op'#}
 
-foreign import ccall "&hsmpi_bor" mpiBor :: Ptr Op
-opBor :: Op
-opBor = unsafePerformIO $ peek mpiBor
-
-foreign import ccall "&hsmpi_bxor" mpiBxor :: Ptr Op
-opBxor :: Op
-opBxor = unsafePerformIO $ peek mpiBxor
-
-foreign import ccall "&hsmpi_land" mpiLand :: Ptr Op
-opLand :: Op
-opLand = unsafePerformIO $ peek mpiLand
-
-foreign import ccall "&hsmpi_lor" mpiLor :: Ptr Op
-opLor :: Op
-opLor = unsafePerformIO $ peek mpiLor
-
-foreign import ccall "&hsmpi_lxor" mpiLxor :: Ptr Op
-opLxor :: Op
-opLxor = unsafePerformIO $ peek mpiLxor
-
-foreign import ccall "&hsmpi_max" mpiMax :: Ptr Op
-opMax :: Op
-opMax = unsafePerformIO $ peek mpiMax
-
-foreign import ccall "&hsmpi_maxloc" mpiMaxloc :: Ptr Op
-opMaxloc :: Op
-opMaxloc = unsafePerformIO $ peek mpiMaxloc
-
-foreign import ccall "&hsmpi_min" mpiMin :: Ptr Op
-opMin :: Op
-opMin = unsafePerformIO $ peek mpiMin
-
-foreign import ccall "&hsmpi_minloc" mpiMinloc :: Ptr Op
-opMinloc :: Op
-opMinloc = unsafePerformIO $ peek mpiMinloc
-
-foreign import ccall "&hsmpi_prod" mpiProd :: Ptr Op
-opProd :: Op
-opProd = unsafePerformIO $ peek mpiProd
-
-foreign import ccall "&hsmpi_sum" mpiSum :: Ptr Op
-opSum :: Op
-opSum = unsafePerformIO $ peek mpiSum
+{#fun pure mpihs_get_band as opBand {+} -> `Op'#}
+{#fun pure mpihs_get_bor as opBor {+} -> `Op'#}
+{#fun pure mpihs_get_bxor as opBxor {+} -> `Op'#}
+{#fun pure mpihs_get_land as opLand {+} -> `Op'#}
+{#fun pure mpihs_get_lor as opLor {+} -> `Op'#}
+{#fun pure mpihs_get_lxor as opLxor {+} -> `Op'#}
+{#fun pure mpihs_get_max as opMax {+} -> `Op'#}
+{#fun pure mpihs_get_maxloc as opMaxloc {+} -> `Op'#}
+{#fun pure mpihs_get_min as opMin {+} -> `Op'#}
+{#fun pure mpihs_get_minloc as opMinloc {+} -> `Op'#}
+{#fun pure mpihs_get_prod as opProd {+} -> `Op'#}
+{#fun pure mpihs_get_sum as opSum {+} -> `Op'#}
 
 instance HasDatatype a => HasDatatype (Monoid.Product a) where
   datatype = datatype @a
@@ -441,77 +464,84 @@ instance (Bounded a, Ord a, HasDatatype a) => HasOp (Semigroup.Min a) where
 
 
 
-foreign import ccall "&hsmpi_any_source" mpiAnySource :: Ptr Rank
-anySource :: Rank
-anySource = unsafePerformIO $ peek mpiAnySource
+{#fun pure mpihs_get_any_source as anySource {} -> `Rank' toRank#}
 
 
 
-foreign import ccall "&hsmpi_any_tag" mpiAnyTag :: Ptr Tag
-anyTag :: Tag
-anyTag = unsafePerformIO $ peek mpiAnyTag
+{#fun pure mpihs_get_request_null as requestNull {+} -> `Request'#}
+
+
+
+{#fun pure mpihs_get_status_ignore as statusIgnore {} -> `Status'#}
+
+withStatusIgnore :: (Ptr Status -> IO ()) -> IO ()
+withStatusIgnore = withStatus statusIgnore
+
+
+
+{#fun pure mpihs_get_any_tag as anyTag {} -> `Tag' toTag#}
 
 
 
 --------------------------------------------------------------------------------
 
 {#fun Abort as ^
-    { getComm `Comm'
+    { withComm* %`Comm'
     , fromIntegral `Int'
     } -> `()' return*-#}
 
 {#fun Allgather as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun Allreduce as ^
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun Alltoall as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
-{#fun Barrier as ^ {getComm `Comm'} -> `()' return*-#}
+{#fun Barrier as ^ {withComm* %`Comm'} -> `()' return*-#}
 
 {#fun Bcast as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun unsafe Comm_compare as ^
-    { getComm `Comm'
-    , getComm `Comm'
+    { withComm* %`Comm'
+    , withComm* %`Comm'
     , alloca- `ComparisonResult' peekEnum*
     } -> `()' return*-#}
 
 {#fun unsafe Comm_rank as ^
-    { getComm `Comm'
+    { withComm* %`Comm'
     , alloca- `Rank' peekCoerce*
     } -> `()' return*-#}
 
 {#fun unsafe Comm_size as ^
-    { getComm `Comm'
+    { withComm* %`Comm'
     , alloca- `Rank' peekCoerce*
     } -> `()' return*-#}
 
@@ -519,9 +549,9 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun Finalize as ^ {} -> `()' return*-#}
@@ -531,17 +561,17 @@ anyTag = unsafePerformIO $ peek mpiAnyTag
 {#fun Gather as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun unsafe Get_count as ^
     { withStatus* `Status'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , alloca- `Int' peekInt*
     } -> `()' return*-#}
 
@@ -584,11 +614,11 @@ getVersion =
 {#fun Iallgather as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
@@ -596,34 +626,34 @@ getVersion =
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Ialltoall as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Ibarrier as ^
-    { getComm `Comm'
+    { withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Ibcast as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
@@ -631,21 +661,21 @@ getVersion =
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Igather as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
@@ -669,27 +699,27 @@ init = init_ argc argv
 initThread :: ThreadSupport -> IO ThreadSupport
 initThread ts = initThread_ argc argv ts
 
-iprobe_ :: Rank -> Tag -> Comm -> IO (Bool, Status)
-iprobe_ rank tag comm =
-  do fst <- mallocForeignPtrBytes {#sizeof MPI_Status#}
-     withForeignPtr fst $ \st ->
+iprobeBool :: Rank -> Tag -> Comm -> IO (Bool, Status)
+iprobeBool rank tag comm =
+  withComm comm $ \comm' ->
+  do st <- Status <$> mallocForeignPtrBytes {#sizeof MPI_Status#}
+     withStatus st $ \st' ->
        do alloca $ \flag ->
-            do _ <- {#call Iprobe as iprobe__#}
-                    (fromRank rank) (fromTag tag) (getComm comm) flag st
-               x <- peekBool flag
-               let y = Status fst
-               return (x, y)
+            do _ <- {#call mpihs_iprobe as iprobeBool_#}
+                    (fromRank rank) (fromTag tag) comm' flag st'
+               b <- peekBool flag
+               return (b, st)
 
 iprobe :: Rank -> Tag -> Comm -> IO (Maybe Status)
-iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
+iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
 
 {#fun Irecv as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
     , fromTag `Tag'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
@@ -697,10 +727,10 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
@@ -708,48 +738,48 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Iscatter as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Isend as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
     , fromTag `Tag'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Request' return*#}
 
 {#fun Probe as ^
     { fromRank `Rank'
     , fromTag `Tag'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Status' return*#}
 
 {#fun Recv as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
     , fromTag `Tag'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Status' return*#}
 
@@ -757,71 +787,87 @@ iprobe rank tag comm = bool2maybe <$> iprobe_ rank tag comm
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun Scan as ^
     { id `Ptr ()'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
-    , getOp `Op'
-    , getComm `Comm'
+    , withDatatype* %`Datatype'
+    , withOp* %`Op'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun Scatter as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
-    , getComm `Comm'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun Send as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
     , fromTag `Tag'
-    , getComm `Comm'
+    , withComm* %`Comm'
     } -> `()' return*-#}
 
 {#fun Sendrecv as ^
     { id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
     , fromTag `Tag'
     , id `Ptr ()'
     , fromCount `Count'
-    , getDatatype `Datatype'
+    , withDatatype* %`Datatype'
     , fromRank `Rank'
     , fromTag `Tag'
-    , getComm `Comm'
+    , withComm* %`Comm'
     , +
     } -> `Status' return*#}
 
-test_ :: Request -> IO (Bool, Status)
-test_ (Request freq) =
-  do withForeignPtr freq $ \req ->
-       do fst <- mallocForeignPtrBytes {#sizeof MPI_Status#}
-          withForeignPtr fst $ \st ->
-            do alloca $ \flag ->
-                 do _ <- {#call Test as test__#} req flag st
-                    x <- peekBool flag
-                    let y = Status fst
-                    return (x, y)
+-- TODO: use these as default
+sendrecv' :: forall a b. (HasDatatype a, HasDatatype b) =>
+             Ptr a -> Count -> Rank -> Tag ->
+             Ptr b -> Count -> Rank -> Tag ->
+             Comm -> IO Status
+sendrecv' sendbuf sendcount sendrank sendtag
+          recvbuf recvcount recvrank recvtag
+          comm =
+  sendrecv (castPtr sendbuf) sendcount (datatype @a) sendrank sendtag
+           (castPtr recvbuf) recvcount (datatype @b) recvrank recvtag
+           comm
+
+testBool :: Request -> IO (Bool, Status)
+testBool req =
+  withRequest req $ \req' ->
+  alloca $ \flag ->
+  do st <- Status <$> mallocForeignPtrBytes {#sizeof MPI_Status#}
+     withStatus st $ \st' ->
+       do _ <- {#call Test as testBool_#} req' flag st'
+          b <- peekBool flag
+          return (b, st)
 
 test :: Request -> IO (Maybe Status)
-test req = bool2maybe <$> test_ req
+test req = bool2maybe <$> testBool req
 
 {#fun Wait as ^
-    { `Request'
+    { withRequest* `Request'
     , +
     } -> `Status' return*#}
+
+{#fun Wait as wait_
+    { withRequest* `Request'
+    , withStatusIgnore- `Status'
+    } -> `()' return*-#}

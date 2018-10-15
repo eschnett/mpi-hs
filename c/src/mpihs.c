@@ -1,36 +1,72 @@
 #include <mpi.h>
 #include <mpihs.h>
 
-const int hsmpi_any_source = MPI_ANY_SOURCE;
+// Comm
+void mpihs_get_comm_null(MPI_Comm *comm) { *comm = MPI_COMM_NULL; }
+void mpihs_get_comm_self(MPI_Comm *comm) { *comm = MPI_COMM_SELF; }
+void mpihs_get_comm_world(MPI_Comm *comm) { *comm = MPI_COMM_WORLD; }
 
-const int hsmpi_any_tag = MPI_ANY_TAG;
+// Datatype
+void mpihs_get_datatype_null(MPI_Datatype *datatype) {
+  *datatype = MPI_DATATYPE_NULL;
+}
 
-const MPI_Comm hsmpi_comm_self = MPI_COMM_SELF;
-const MPI_Comm hsmpi_comm_world = MPI_COMM_WORLD;
+void mpihs_get_byte(MPI_Datatype *datatype) { *datatype = MPI_BYTE; }
+void mpihs_get_char(MPI_Datatype *datatype) { *datatype = MPI_CHAR; }
+void mpihs_get_double(MPI_Datatype *datatype) { *datatype = MPI_DOUBLE; }
+void mpihs_get_float(MPI_Datatype *datatype) { *datatype = MPI_FLOAT; }
+void mpihs_get_int(MPI_Datatype *datatype) { *datatype = MPI_INT; }
+void mpihs_get_long(MPI_Datatype *datatype) { *datatype = MPI_LONG; }
+void mpihs_get_long_double(MPI_Datatype *datatype) {
+  *datatype = MPI_LONG_DOUBLE;
+}
+void mpihs_get_long_long_int(MPI_Datatype *datatype) {
+  *datatype = MPI_LONG_LONG_INT;
+}
+void mpihs_get_short(MPI_Datatype *datatype) { *datatype = MPI_SHORT; }
+void mpihs_get_unsigned(MPI_Datatype *datatype) { *datatype = MPI_UNSIGNED; }
+void mpihs_get_unsigned_char(MPI_Datatype *datatype) {
+  *datatype = MPI_UNSIGNED_CHAR;
+}
+void mpihs_get_unsigned_long(MPI_Datatype *datatype) {
+  *datatype = MPI_UNSIGNED_LONG;
+}
+void mpihs_get_unsigned_short(MPI_Datatype *datatype) {
+  *datatype = MPI_UNSIGNED_SHORT;
+}
 
-const MPI_Datatype hsmpi_byte = MPI_BYTE;
-const MPI_Datatype hsmpi_char = MPI_CHAR;
-const MPI_Datatype hsmpi_double = MPI_DOUBLE;
-const MPI_Datatype hsmpi_float = MPI_FLOAT;
-const MPI_Datatype hsmpi_int = MPI_INT;
-const MPI_Datatype hsmpi_long = MPI_LONG;
-const MPI_Datatype hsmpi_long_double = MPI_LONG_DOUBLE;
-const MPI_Datatype hsmpi_long_long_int = MPI_LONG_LONG_INT;
-const MPI_Datatype hsmpi_short = MPI_SHORT;
-const MPI_Datatype hsmpi_unsigned = MPI_UNSIGNED;
-const MPI_Datatype hsmpi_unsigned_char = MPI_UNSIGNED_CHAR;
-const MPI_Datatype hsmpi_unsigned_long = MPI_UNSIGNED_LONG;
-const MPI_Datatype hsmpi_unsigned_short = MPI_UNSIGNED_SHORT;
+// Op
+void mpihs_get_op_null(MPI_Op *op) { *op = MPI_OP_NULL; }
 
-const MPI_Op hsmpi_band = MPI_BAND;
-const MPI_Op hsmpi_bor = MPI_BOR;
-const MPI_Op hsmpi_bxor = MPI_BXOR;
-const MPI_Op hsmpi_land = MPI_LAND;
-const MPI_Op hsmpi_lor = MPI_LOR;
-const MPI_Op hsmpi_lxor = MPI_LXOR;
-const MPI_Op hsmpi_max = MPI_MAX;
-const MPI_Op hsmpi_maxloc = MPI_MAXLOC;
-const MPI_Op hsmpi_min = MPI_MIN;
-const MPI_Op hsmpi_minloc = MPI_MINLOC;
-const MPI_Op hsmpi_prod = MPI_PROD;
-const MPI_Op hsmpi_sum = MPI_SUM;
+void mpihs_get_band(MPI_Op *op) { *op = MPI_BAND; }
+void mpihs_get_bor(MPI_Op *op) { *op = MPI_BOR; }
+void mpihs_get_bxor(MPI_Op *op) { *op = MPI_BXOR; }
+void mpihs_get_land(MPI_Op *op) { *op = MPI_LAND; }
+void mpihs_get_lor(MPI_Op *op) { *op = MPI_LOR; }
+void mpihs_get_lxor(MPI_Op *op) { *op = MPI_LXOR; }
+void mpihs_get_max(MPI_Op *op) { *op = MPI_MAX; }
+void mpihs_get_maxloc(MPI_Op *op) { *op = MPI_MAXLOC; }
+void mpihs_get_min(MPI_Op *op) { *op = MPI_MIN; }
+void mpihs_get_minloc(MPI_Op *op) { *op = MPI_MINLOC; }
+void mpihs_get_prod(MPI_Op *op) { *op = MPI_PROD; }
+void mpihs_get_sum(MPI_Op *op) { *op = MPI_SUM; }
+
+// Rank
+int mpihs_get_any_source() { return MPI_ANY_SOURCE; }
+
+// Request
+void mpihs_get_request_null(MPI_Request *request) {
+  *request = MPI_REQUEST_NULL;
+}
+
+// Status
+MPI_Status *mpihs_get_status_ignore() { return MPI_STATUS_IGNORE; }
+
+// Tag
+int mpihs_get_any_tag() { return MPI_ANY_TAG; }
+
+// Wrappers
+int mpihs_iprobe(int source, int tag, MPI_Comm *comm, int *flag,
+                 MPI_Status *status) {
+  return MPI_Iprobe(source, tag, *comm, flag, status);
+}
