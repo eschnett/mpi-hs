@@ -117,13 +117,10 @@ pointToPoint = testGroup "point-to-point"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
 
-       withForeignPtr buf $ \ptr ->
-         MPI.send (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag MPI.commWorld
+       MPI.send buf 1 rank MPI.unitTag MPI.commWorld
 
        buf' <- mallocForeignPtr @CInt
-       st <- withForeignPtr buf' $ \ptr' ->
-         MPI.recv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag
-           MPI.commWorld
+       st <- MPI.recv buf' 1 rank MPI.unitTag MPI.commWorld
        msg' <- withForeignPtr buf' peek
 
        source <- MPI.getSource st
@@ -140,12 +137,9 @@ pointToPoint = testGroup "point-to-point"
 
        buf' <- mallocForeignPtr @CInt
 
-       st <- withForeignPtr buf $ \ptr ->
-         withForeignPtr buf' $ \ptr' ->
-           MPI.sendrecv
-             (castPtr ptr) 1 MPI.datatypeInt ((rank + 1) `mod` size) MPI.unitTag
-             (castPtr ptr') 1 MPI.datatypeInt ((rank - 1) `mod` size)
-               MPI.unitTag
+       st <- MPI.sendrecv
+             buf 1 ((rank + 1) `mod` size) MPI.unitTag
+             buf' 1 ((rank - 1) `mod` size) MPI.unitTag
              MPI.commWorld
 
        msg' <- withForeignPtr buf' peek
@@ -170,14 +164,10 @@ pointToPointNonBlocking = testGroup "point-to-point non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
 
-       req <- withForeignPtr buf $ \ptr ->
-         MPI.isend (castPtr ptr) 1 MPI.datatypeInt rank MPI.unitTag
-           MPI.commWorld
+       req <- MPI.isend buf 1 rank MPI.unitTag MPI.commWorld
 
        buf' <- mallocForeignPtr @CInt
-       req' <- withForeignPtr buf' $ \ptr' ->
-         MPI.irecv (castPtr ptr') 1 MPI.datatypeInt rank MPI.unitTag
-           MPI.commWorld
+       req' <- MPI.irecv buf' 1 rank MPI.unitTag MPI.commWorld
 
        MPI.wait_ req
        st <- MPI.wait req'
@@ -204,11 +194,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtrArray @CInt sz
-       withForeignPtr buf $ \ptr ->
-         withForeignPtr buf' $ \ptr' ->
-           MPI.allgather (castPtr ptr) 1 MPI.datatypeInt
-                         (castPtr ptr') 1 MPI.datatypeInt
-                         MPI.commWorld
+       MPI.allgather buf 1 buf' 1 MPI.commWorld
        msgs' <- withForeignPtr buf' (peekArray sz)
        msgs' == [42 .. 42 + fromIntegral (sz-1)] @? ""
   , testCase "alltoall" $
@@ -220,11 +206,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtrArray @CInt sz
        withForeignPtr buf $ \ptr -> pokeArray ptr msgs
        buf' <- mallocForeignPtrArray @CInt sz
-       withForeignPtr buf $ \ptr ->
-         withForeignPtr buf' $ \ptr' ->
-           MPI.alltoall (castPtr ptr) 1 MPI.datatypeInt
-                        (castPtr ptr') 1 MPI.datatypeInt
-                        MPI.commWorld
+       MPI.alltoall buf 1 buf' 1 MPI.commWorld
        msgs' <- withForeignPtr buf' (peekArray sz)
        msgs' == (fromIntegral <$> [42 + sz * i + rk | i <- [0 .. sz-1]]) @? ""
   , testCase "barrier" $
@@ -235,8 +217,7 @@ collective = testGroup "collective"
        let msg = 42 + rk
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
-       withForeignPtr buf $ \ptr ->
-         MPI.bcast (castPtr ptr) 1 MPI.datatypeInt MPI.rootRank MPI.commWorld
+       MPI.bcast buf 1 MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf peek
        msg' == 42 @? ""
   , testCase "gather" $
@@ -249,11 +230,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
-       withForeignPtr buf $ \ptr ->
-         withForeignPtr buf' $ \ptr' ->
-           MPI.gather (castPtr ptr) 1 MPI.datatypeInt
-                      (castPtr ptr') 1 MPI.datatypeInt
-                      MPI.rootRank MPI.commWorld
+       MPI.gather buf 1 buf' 1 MPI.rootRank MPI.commWorld
        msgs' <- withForeignPtr buf' $ peekArray (if isroot then sz else 0)
        msgs' == (if isroot then [42 .. 42 + fromIntegral sz-1] else []) @? ""
   , testCase "scatter" $
@@ -266,11 +243,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
        withForeignPtr buf $ \ptr -> pokeArray ptr msgs
        buf' <- mallocForeignPtr @CInt
-       withForeignPtr buf $ \ptr ->
-         withForeignPtr buf' $ \ptr' ->
-           MPI.scatter (castPtr ptr) 1 MPI.datatypeInt
-                       (castPtr ptr') 1 MPI.datatypeInt
-                       MPI.rootRank MPI.commWorld
+       MPI.scatter buf 1 buf' 1 MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf' peek
        msg' == 42 + rk @? ""
   ]

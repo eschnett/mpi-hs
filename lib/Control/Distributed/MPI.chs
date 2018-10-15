@@ -36,6 +36,7 @@ module Control.Distributed.MPI
   , unitTag
   , ThreadSupport(..)
 
+  , HasPtr(..)
   , commNull
   , commSelf
   , commWorld
@@ -116,7 +117,6 @@ module Control.Distributed.MPI
   , scatter
   , send
   , sendrecv
-  , sendrecv'
   , test
   , wait
   , wait_
@@ -188,6 +188,20 @@ peekInt = liftM fromIntegral . peek
 
 
 --------------------------------------------------------------------------------
+
+class HasPtr p where
+  withPtr :: Storable a => p a -> (Ptr a -> IO b) -> IO b
+
+instance HasPtr Ptr where
+  withPtr p f = f p
+
+instance HasPtr ForeignPtr where
+  withPtr = withForeignPtr
+
+instance HasPtr StablePtr where
+  withPtr p f = f (castPtr (castStablePtrToPtr p))
+
+
 
 {#pointer *MPI_Comm as Comm foreign newtype#}
 
@@ -490,7 +504,7 @@ withStatusIgnore = withStatus statusIgnore
     , fromIntegral `Int'
     } -> `()' return*-#}
 
-{#fun Allgather as ^
+{#fun Allgather as allgatherTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -499,6 +513,17 @@ withStatusIgnore = withStatus statusIgnore
     , withDatatype* %`Datatype'
     , withComm* %`Comm'
     } -> `()' return*-#}
+
+allgather :: forall a b p q.
+             ( HasPtr p, HasPtr q
+             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+             p a -> Count -> q b -> Count -> Comm -> IO ()
+allgather sendbuf sendcount recvbuf recvcount comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  allgatherTyped (castPtr sendbuf') sendcount (datatype @a)
+                 (castPtr recvbuf') recvcount (datatype @b)
+                 comm
 
 {#fun Allreduce as ^
     { id `Ptr ()'
@@ -509,7 +534,7 @@ withStatusIgnore = withStatus statusIgnore
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-{#fun Alltoall as ^
+{#fun Alltoall as alltoallTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -519,15 +544,32 @@ withStatusIgnore = withStatus statusIgnore
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+alltoall :: forall a b p q.
+            ( HasPtr p, HasPtr q
+            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+            p a -> Count -> q b -> Count -> Comm -> IO ()
+alltoall sendbuf sendcount recvbuf recvcount comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  alltoallTyped (castPtr sendbuf') sendcount (datatype @a)
+                (castPtr recvbuf') recvcount (datatype @b)
+                comm
+
 {#fun Barrier as ^ {withComm* %`Comm'} -> `()' return*-#}
 
-{#fun Bcast as ^
+{#fun Bcast as bcastTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
     , fromRank `Rank'
     , withComm* %`Comm'
     } -> `()' return*-#}
+
+bcast :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+         p a -> Count -> Rank -> Comm -> IO ()
+bcast buf count root comm =
+  withPtr buf $ \buf' ->
+  bcastTyped (castPtr buf') count (datatype @a) root comm
 
 {#fun unsafe Comm_compare as ^
     { withComm* %`Comm'
@@ -558,7 +600,7 @@ withStatusIgnore = withStatus statusIgnore
 
 {#fun Finalized as ^ {alloca- `Bool' peekBool*} -> `()' return*-#}
 
-{#fun Gather as ^
+{#fun Gather as gatherTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -568,6 +610,17 @@ withStatusIgnore = withStatus statusIgnore
     , fromRank `Rank'
     , withComm* %`Comm'
     } -> `()' return*-#}
+
+gather :: forall a b p q.
+          ( HasPtr p, HasPtr q
+          , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+          p a -> Count -> q b -> Count -> Rank -> Comm -> IO ()
+gather sendbuf sendcount recvbuf recvcount root comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  gatherTyped (castPtr sendbuf') sendcount (datatype @a)
+              (castPtr recvbuf') recvcount (datatype @b)
+              root comm
 
 {#fun unsafe Get_count as ^
     { withStatus* `Status'
@@ -713,7 +766,7 @@ iprobeBool rank tag comm =
 iprobe :: Rank -> Tag -> Comm -> IO (Maybe Status)
 iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
 
-{#fun Irecv as ^
+{#fun Irecv as irecvTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -722,6 +775,12 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , withComm* %`Comm'
     , +
     } -> `Request' return*#}
+
+irecv :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+        p a -> Count -> Rank -> Tag -> Comm -> IO Request
+irecv recvbuf recvcount recvrank recvtag comm =
+  withPtr recvbuf $ \recvbuf' ->
+  irecvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
 
 {#fun Ireduce as ^
     { id `Ptr ()'
@@ -756,7 +815,7 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , +
     } -> `Request' return*#}
 
-{#fun Isend as ^
+{#fun Isend as isendTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -766,6 +825,12 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , +
     } -> `Request' return*#}
 
+isend :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+         p a -> Count -> Rank -> Tag -> Comm -> IO Request
+isend sendbuf sendcount sendrank sendtag comm =
+  withPtr sendbuf $ \sendbuf' ->
+  isendTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag comm
+
 {#fun Probe as ^
     { fromRank `Rank'
     , fromTag `Tag'
@@ -773,7 +838,7 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , +
     } -> `Status' return*#}
 
-{#fun Recv as ^
+{#fun Recv as recvTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -782,6 +847,12 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , withComm* %`Comm'
     , +
     } -> `Status' return*#}
+
+recv :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+        p a -> Count -> Rank -> Tag -> Comm -> IO Status
+recv recvbuf recvcount recvrank recvtag comm =
+  withPtr recvbuf $ \recvbuf' ->
+  recvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
 
 {#fun Reduce as ^
     { id `Ptr ()'
@@ -802,7 +873,7 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-{#fun Scatter as ^
+{#fun Scatter as scatterTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -813,7 +884,18 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-{#fun Send as ^
+scatter :: forall a b p q.
+           ( HasPtr p, HasPtr q
+           , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+           p a -> Count -> q b -> Count -> Rank -> Comm -> IO ()
+scatter sendbuf sendcount recvbuf recvcount root comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  scatterTyped (castPtr sendbuf') sendcount (datatype @a)
+               (castPtr recvbuf') recvcount (datatype @b)
+               root comm
+
+{#fun Send as sendTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -822,7 +904,13 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-{#fun Sendrecv as ^
+send :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+        p a -> Count -> Rank -> Tag -> Comm -> IO ()
+send sendbuf sendcount sendrank sendtag comm =
+  withPtr sendbuf $ \sendbuf' ->
+  sendTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag comm
+
+{#fun Sendrecv as sendrecvTyped
     { id `Ptr ()'
     , fromCount `Count'
     , withDatatype* %`Datatype'
@@ -837,17 +925,20 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , +
     } -> `Status' return*#}
 
--- TODO: use these as default
-sendrecv' :: forall a b. (HasDatatype a, HasDatatype b) =>
-             Ptr a -> Count -> Rank -> Tag ->
-             Ptr b -> Count -> Rank -> Tag ->
-             Comm -> IO Status
-sendrecv' sendbuf sendcount sendrank sendtag
-          recvbuf recvcount recvrank recvtag
-          comm =
-  sendrecv (castPtr sendbuf) sendcount (datatype @a) sendrank sendtag
-           (castPtr recvbuf) recvcount (datatype @b) recvrank recvtag
-           comm
+sendrecv :: forall a b p q.
+            ( HasPtr p, HasPtr q
+            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+            p a -> Count -> Rank -> Tag ->
+            q b -> Count -> Rank -> Tag ->
+            Comm -> IO Status
+sendrecv sendbuf sendcount sendrank sendtag
+         recvbuf recvcount recvrank recvtag
+         comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  sendrecvTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag
+                (castPtr recvbuf') recvcount (datatype @b) recvrank recvtag
+                comm
 
 testBool :: Request -> IO (Bool, Status)
 testBool req =
