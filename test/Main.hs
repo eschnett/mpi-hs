@@ -21,11 +21,11 @@ import qualified Control.Distributed.MPI as MPI
 
 infix 1 @?
 (@?) :: Bool -> String -> IO ()
-x @? _ = if not x then exitFailure else return ()
+x @? msg = if not x then die msg else return ()
 
 infix 1 @?=
 (@?=) :: Eq a => a -> a -> IO ()
-x @?= y = x == y @? ""
+x @?= y = x == y @? "test failed"
 
 
 
@@ -74,7 +74,7 @@ defaultMain tree =
 main :: IO ()
 main = bracket
   (do ts <- MPI.initThread MPI.ThreadMultiple
-      ts >= MPI.ThreadMultiple @? ""
+      ts >= MPI.ThreadMultiple @? "insufficient thread support"
   )
   (\_ -> MPI.finalize)
   (\_ -> defaultMain tests)
