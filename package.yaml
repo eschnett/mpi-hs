@@ -1,15 +1,10 @@
-# This YAML file describes your package. Stack will automatically generate a
-# Cabal file when you run `stack build`. See the hpack website for help with
-# this file: <https://github.com/sol/hpack>.
 name: mpi-hs
-version: '0.0.0.0'
+version: '0.1.0.0'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter"
 maintainer: "Erik Schnetter"
-# synopsis: A new Haskeleton package.
-# description: mpi-hs is a new Haskeleton package.
-# category: Other
+synopsis: MPI bindings for Haskell
 
 extra-source-files:
   - LICENSE

@@ -8,6 +8,7 @@ jobs:
       - checkout
       - run: |
           sudo apt update &&
+          # TODO: Install a multi-threaded MPI library
           sudo apt -y install libopenmpi-dev openmpi-bin
       - restore_cache:
           key: cache-lts-12.13
