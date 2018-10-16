@@ -11,12 +11,13 @@ jobs:
           sudo apt -y install libopenmpi-dev openmpi-bin
       - restore_cache:
           key: cache-lts-12.13
-      - run: stack build --haddock --test --only-dependencies --no-terminal --system-ghc
+      - run: |
+          stack --no-terminal --system-ghc build --haddock --test --only-dependencies
       - save_cache:
           key: cache-lts-12.13
           paths:
             - ~/.stack
       - run: |
-          stack build --haddock --test --no-run-tests --no-terminal --system-ghc &&
-          mpirun --allow-run-as-root --mca btl self,vader -np 3 stack exec $(stack path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite &&
-          stack install --no-terminal --system-ghc
+          stack --no-terminal --system-ghc build --haddock --test --no-run-tests &&
+          mpirun --allow-run-as-root --mca btl self,vader -np 3 stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite &&
+          stack --no-terminal --system-ghc install
