@@ -4,8 +4,30 @@ github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter"
 maintainer: "Erik Schnetter"
-synopsis: MPI bindings for Haskell
 category: Distributed Computing
+synopsis: MPI bindings for Haskell
+description: |
+  MPI (the [Message Passing Interface](https://www.mpi-forum.org)) is
+  widely used standard for distributed-memory programming on HPC (High
+  Performance Computing) systems. MPI allows exchanging data
+  (_messages_) between programs running in parallel. There are several
+  high-quality open source MPI implementations (e.g. MPICH, MVAPICH,
+  OpenMPI) as well as a variety of closed-source implementations.
+  These libraries can typically make use of high-bandwidth low-latency
+  communication hardware such as InfiniBand.
+
+  This library @mpi-hs@ provides Haskell bindings for MPI. It is based
+  on ideas taken from
+  [haskell-mpi](https://github.com/bjpop/haskell-mpi),
+  [Boost.MPI](https://www.boost.org/doc/libs/1_64_0/doc/html/mpi.html),
+  and [MPI for Python](https://mpi4py.readthedocs.io/en/stable/).
+
+  @mpi-hs@ provides two API levels: A low-level API gives rather
+  direct access to the MPI API, apart from certain "reasonable"
+  mappings from C to Haskell (e.g. output arguments that are in C
+  stored to a pointer are in Haskell regular return values). A
+  high-level API simplifies exchanging arbitrary values that can be
+  serialized.
 
 extra-source-files:
   - LICENSE
@@ -20,7 +42,7 @@ ghc-options:
 
 library:
   dependencies:
-    - base
+    - base >=4.11 && <4.12
   build-tools:
     - c2hs
   source-dirs:
