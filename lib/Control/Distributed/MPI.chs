@@ -35,6 +35,7 @@ module Control.Distributed.MPI
   , toTag
   , unitTag
   , ThreadSupport(..)
+  , threadSupport
 
   , Pointer(..)
   , commNull
@@ -135,6 +136,7 @@ import qualified Prelude
 
 import Control.Monad (liftM)
 import Data.Coerce
+import Data.IORef
 import Data.Ix
 import qualified Data.Monoid as Monoid
 import qualified Data.Semigroup as Semigroup
@@ -327,6 +329,11 @@ unitTag = toTag ()
 
 
 {#enum ThreadSupport {} deriving (Eq, Ord, Read, Show)#}
+
+providedThreadSupport :: IORef (Maybe ThreadSupport)
+providedThreadSupport = unsafePerformIO (newIORef Nothing)
+threadSupport :: IO (Maybe ThreadSupport)
+threadSupport = readIORef providedThreadSupport
 
 
 
@@ -831,7 +838,8 @@ igather sendbuf sendcount recvbuf recvcount root comm =
     } -> `()' return*-#}
 
 init :: IO ()
-init = init_ argc argv
+init = do init_ argc argv
+          writeIORef providedThreadSupport (Just ThreadSingle)
 
 {#fun Init_thread as initThread_
     { with* `CInt'
@@ -841,7 +849,9 @@ init = init_ argc argv
     } -> `()' return*-#}
 
 initThread :: ThreadSupport -> IO ThreadSupport
-initThread ts = initThread_ argc argv ts
+initThread ts = do ts' <- initThread_ argc argv ts
+                   writeIORef providedThreadSupport (Just ts')
+                   return ts'
 
 iprobeBool :: Rank -> Tag -> Comm -> IO (Bool, Status)
 iprobeBool rank tag comm =

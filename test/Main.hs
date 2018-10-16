@@ -73,9 +73,8 @@ defaultMain tree =
 
 main :: IO ()
 main = bracket
-  (do ts <- MPI.initThread MPI.ThreadMultiple
-      ts >= MPI.ThreadMultiple @? "insufficient thread support"
-  )
+  (do _ <- MPI.initThread MPI.ThreadMultiple
+      return ())
   (\_ -> MPI.finalize)
   (\_ -> defaultMain tests)
 
@@ -581,47 +580,50 @@ dynamic = testGroup "dynamic"
          )
          checkDone
   , testCase "multi-threaded" $
-    do rank <- MPI.commRank MPI.commWorld
-       size <- MPI.commSize MPI.commWorld
-
-       breq <- newEmptyMVar
-       let signalDone =
-             do _ <- forkIO $
-                  do req <- MPI.ibarrier MPI.commWorld
-                     whileM_ (not <$> MPI.test_ req) yield
-                     putMVar breq ()
-                return ()
-       let checkDone = not <$> isEmptyMVar breq
-
-       let sendMsg dst =
-             when (dst < size) $
-             do _ <- forkIO $
-                  do buf <- mallocForeignPtr @CInt
-                     withForeignPtr buf $ \ptr -> poke ptr 42
-                     req <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
-                     whileM_ (not <$> MPI.test_ req) yield
-                return ()
-       let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
-       let recvMsg st =
-             do src <- MPI.getSource st
-                buf <- mallocForeignPtr @CInt
-                MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
-
-       -- rank r sends to 2*r+1 and 2*r+2
-       when (rank == 0) $
-         do sendMsg (2 * rank + 1)
-            sendMsg (2 * rank + 2)
-            signalDone
-
-       untilM_
-         (do mst <- checkForMsg
-             case mst of
-               Nothing -> return ()
-               Just st -> do recvMsg st
-                             sendMsg (2 * rank + 1)
-                             sendMsg (2 * rank + 2)
-                             signalDone
-             yield
-         )
-         checkDone
+    do mts <- MPI.threadSupport
+       let Just ts = mts
+       when (ts >= MPI.ThreadMultiple) $
+         do rank <- MPI.commRank MPI.commWorld
+            size <- MPI.commSize MPI.commWorld
+     
+            breq <- newEmptyMVar
+            let signalDone =
+                  do _ <- forkIO $
+                       do req <- MPI.ibarrier MPI.commWorld
+                          whileM_ (not <$> MPI.test_ req) yield
+                          putMVar breq ()
+                     return ()
+            let checkDone = not <$> isEmptyMVar breq
+     
+            let sendMsg dst =
+                  when (dst < size) $
+                  do _ <- forkIO $
+                       do buf <- mallocForeignPtr @CInt
+                          withForeignPtr buf $ \ptr -> poke ptr 42
+                          req <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
+                          whileM_ (not <$> MPI.test_ req) yield
+                     return ()
+            let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
+            let recvMsg st =
+                  do src <- MPI.getSource st
+                     buf <- mallocForeignPtr @CInt
+                     MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
+     
+            -- rank r sends to 2*r+1 and 2*r+2
+            when (rank == 0) $
+              do sendMsg (2 * rank + 1)
+                 sendMsg (2 * rank + 2)
+                 signalDone
+     
+            untilM_
+              (do mst <- checkForMsg
+                  case mst of
+                    Nothing -> return ()
+                    Just st -> do recvMsg st
+                                  sendMsg (2 * rank + 1)
+                                  sendMsg (2 * rank + 2)
+                                  signalDone
+                  yield
+              )
+              checkDone
   ]
