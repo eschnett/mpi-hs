@@ -40,6 +40,7 @@ module Control.Distributed.MPI
   , commNull
   , commSelf
   , commWorld
+  , countUndefined
   -- TODO: use a module for this namespace
   , datatypeNull
   , datatypeByte
@@ -124,6 +125,8 @@ module Control.Distributed.MPI
   , test_
   , wait
   , wait_
+  , wtick
+  , wtime
   ) where
 
 import Prelude hiding (fromEnum, fst, init, toEnum)
@@ -331,6 +334,10 @@ unitTag = toTag ()
 {#fun pure mpihs_get_comm_null as commNull {+} -> `Comm'#}
 {#fun pure mpihs_get_comm_self as commSelf {+} -> `Comm'#}
 {#fun pure mpihs_get_comm_world as commWorld {+} -> `Comm'#}
+
+
+
+{#fun pure mpihs_get_undefined as countUndefined {} -> `Count' toCount#}
 
 
 
@@ -1151,3 +1158,7 @@ test_ req =
     { withRequest* `Request'
     , withStatusIgnore- `Status'
     } -> `()' return*-#}
+
+{#fun unsafe Wtick as ^ {} -> `Double'#}
+
+{#fun unsafe Wtime as ^ {} -> `Double'#}

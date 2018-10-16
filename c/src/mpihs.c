@@ -6,6 +6,9 @@ void mpihs_get_comm_null(MPI_Comm *comm) { *comm = MPI_COMM_NULL; }
 void mpihs_get_comm_self(MPI_Comm *comm) { *comm = MPI_COMM_SELF; }
 void mpihs_get_comm_world(MPI_Comm *comm) { *comm = MPI_COMM_WORLD; }
 
+// Count
+int mpihs_get_undefined() { return MPI_UNDEFINED; }
+
 // Datatype
 void mpihs_get_datatype_null(MPI_Datatype *datatype) {
   *datatype = MPI_DATATYPE_NULL;
