@@ -2,6 +2,10 @@
 {-# LANGUAGE TypeApplications #-}
 
 import Control.Exception
+import Control.Monad
+import Control.Monad.Loops
+import Data.IORef
+import Data.Maybe
 import Foreign
 import Foreign.C.Types
 import System.Exit
@@ -82,6 +86,7 @@ tests = testGroup "MPI"
   , collective
   , collectiveNonBlocking
   , reductions
+  , dynamic
   ]
 
 
@@ -288,9 +293,11 @@ collective = testGroup "collective"
        let rk = MPI.fromRank rank
        let sz = MPI.fromRank size
        let isroot = rank == MPI.rootRank
-       let msgs = [42 + fromIntegral i | i <- [0 .. sz-1]]
+       let msgs =
+             if isroot then [42 + fromIntegral i | i <- [0 .. sz-1]] else []
        buf <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
-       withForeignPtr buf $ \ptr -> pokeArray ptr msgs
+       withForeignPtr buf $
+         \ptr -> if isroot then pokeArray ptr msgs else return ()
        buf' <- mallocForeignPtr @CInt
        MPI.scatter buf 1 buf' 1 MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf' peek
@@ -471,4 +478,106 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        touchForeignPtr buf
        msg' <- withForeignPtr buf' peek
        msg' == 42 + rk @? ""
+  ]
+
+
+
+dynamic :: TestTree
+dynamic = testGroup "dynamic"
+  [ testCase "sequential" $
+    do rank <- MPI.commRank MPI.commWorld
+       size <- MPI.commSize MPI.commWorld
+
+       breq <- newIORef Nothing
+       let signalDone =
+             do r <- MPI.ibarrier MPI.commWorld
+                writeIORef breq (Just r)
+       let checkDone =
+             do mreq <- readIORef breq
+                case mreq of
+                  Nothing -> return False
+                  Just req -> isJust <$> MPI.test req
+
+       sendreqs <- newIORef []
+       let sendMsg dst =
+             when (dst < size) $
+             do buf <- mallocForeignPtr @CInt
+                withForeignPtr buf $ \ptr -> poke ptr 42
+                r <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
+                modifyIORef' sendreqs ((buf, r) :)
+       let drainSendQueue =
+             do srs <- readIORef sendreqs
+                srs' <- filterM (\(_, r) -> isNothing <$> MPI.test r) srs
+                writeIORef sendreqs srs'
+       let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
+       let recvMsg st =
+             do src <- MPI.getSource st
+                buf <- mallocForeignPtr @CInt
+                _ <- MPI.recv buf 1 src MPI.unitTag MPI.commWorld
+                return ()
+
+       -- each rank sends to the next
+       when (rank == 0) $
+         do sendMsg (rank + 1)
+            signalDone
+
+       untilM_
+         (do drainSendQueue
+             mst <- checkForMsg
+             case mst of
+               Nothing -> return ()
+               Just st -> do recvMsg st
+                             sendMsg (rank + 1)
+                             signalDone
+         )
+         checkDone
+  , testCase "tree" $
+    do rank <- MPI.commRank MPI.commWorld
+       size <- MPI.commSize MPI.commWorld
+
+       breq <- newIORef Nothing
+       let signalDone =
+             do r <- MPI.ibarrier MPI.commWorld
+                writeIORef breq (Just r)
+       let checkDone =
+             do mreq <- readIORef breq
+                case mreq of
+                  Nothing -> return False
+                  Just req -> isJust <$> MPI.test req
+
+       sendreqs <- newIORef []
+       let sendMsg dst =
+             when (dst < size) $
+             do buf <- mallocForeignPtr @CInt
+                withForeignPtr buf $ \ptr -> poke ptr 42
+                r <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
+                modifyIORef' sendreqs ((buf, r) :)
+       let drainSendQueue =
+             do srs <- readIORef sendreqs
+                srs' <- filterM (\(_, r) -> isNothing <$> MPI.test r) srs
+                writeIORef sendreqs srs'
+       let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
+       let recvMsg st =
+             do src <- MPI.getSource st
+                buf <- mallocForeignPtr @CInt
+                _ <- MPI.recv buf 1 src MPI.unitTag MPI.commWorld
+                return ()
+
+       -- rank r sends to 2*r+1 and 2*r+2
+       when (rank == 0) $
+         do sendMsg (2 * rank + 1)
+            sendMsg (2 * rank + 2)
+            signalDone
+
+       untilM_
+         (do drainSendQueue
+             mst <- checkForMsg
+             case mst of
+               Nothing -> return ()
+               Just st -> do recvMsg st
+                             sendMsg (2 * rank + 1)
+                             sendMsg (2 * rank + 2)
+                             signalDone
+         )
+         checkDone
   ]

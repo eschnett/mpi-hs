@@ -36,7 +36,7 @@ module Control.Distributed.MPI
   , unitTag
   , ThreadSupport(..)
 
-  , HasPtr(..)
+  , Pointer(..)
   , commNull
   , commSelf
   , commWorld
@@ -189,16 +189,16 @@ peekInt = liftM fromIntegral . peek
 
 --------------------------------------------------------------------------------
 
-class HasPtr p where
+class Pointer p where
   withPtr :: Storable a => p a -> (Ptr a -> IO b) -> IO b
 
-instance HasPtr Ptr where
+instance Pointer Ptr where
   withPtr p f = f p
 
-instance HasPtr ForeignPtr where
+instance Pointer ForeignPtr where
   withPtr = withForeignPtr
 
-instance HasPtr StablePtr where
+instance Pointer StablePtr where
   withPtr p f = f (castPtr (castStablePtrToPtr p))
 
 
@@ -515,7 +515,7 @@ withStatusIgnore = withStatus statusIgnore
     } -> `()' return*-#}
 
 allgather :: forall a b p q.
-             ( HasPtr p, HasPtr q
+             ( Pointer p, Pointer q
              , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
              p a -> Count -> q b -> Count -> Comm -> IO ()
 allgather sendbuf sendcount recvbuf recvcount comm =
@@ -535,7 +535,7 @@ allgather sendbuf sendcount recvbuf recvcount comm =
     } -> `()' return*-#}
 
 allreduce :: forall a p q.
-             ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+             ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
              p a -> q a -> Count -> Op -> Comm -> IO ()
 allreduce sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -554,7 +554,7 @@ allreduce sendbuf recvbuf count op comm =
     } -> `()' return*-#}
 
 alltoall :: forall a b p q.
-            ( HasPtr p, HasPtr q
+            ( Pointer p, Pointer q
             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
             p a -> Count -> q b -> Count -> Comm -> IO ()
 alltoall sendbuf sendcount recvbuf recvcount comm =
@@ -574,7 +574,7 @@ alltoall sendbuf sendcount recvbuf recvcount comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-bcast :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+bcast :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
          p a -> Count -> Rank -> Comm -> IO ()
 bcast buf count root comm =
   withPtr buf $ \buf' ->
@@ -606,7 +606,7 @@ bcast buf count root comm =
     } -> `()' return*-#}
 
 exscan :: forall a p q.
-          ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+          ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
           p a -> q a -> Count -> Op -> Comm -> IO ()
 exscan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -629,7 +629,7 @@ exscan sendbuf recvbuf count op comm =
     } -> `()' return*-#}
 
 gather :: forall a b p q.
-          ( HasPtr p, HasPtr q
+          ( Pointer p, Pointer q
           , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
           p a -> Count -> q b -> Count -> Rank -> Comm -> IO ()
 gather sendbuf sendcount recvbuf recvcount root comm =
@@ -693,7 +693,7 @@ getVersion =
     } -> `Request' return*#}
 
 iallgather :: forall a b p q.
-              ( HasPtr p, HasPtr q
+              ( Pointer p, Pointer q
               , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
               p a -> Count -> q b -> Count -> Comm -> IO Request
 iallgather sendbuf sendcount recvbuf recvcount comm =
@@ -714,7 +714,7 @@ iallgather sendbuf sendcount recvbuf recvcount comm =
     } -> `Request' return*#}
 
 iallreduce :: forall a p q.
-              ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+              ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
               p a -> q a -> Count -> Op -> Comm -> IO Request
 iallreduce sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -734,7 +734,7 @@ iallreduce sendbuf recvbuf count op comm =
     } -> `Request' return*#}
 
 ialltoall :: forall a b p q.
-             ( HasPtr p, HasPtr q
+             ( Pointer p, Pointer q
              , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
              p a -> Count -> q b -> Count -> Comm -> IO Request
 ialltoall sendbuf sendcount recvbuf recvcount comm =
@@ -758,7 +758,7 @@ ialltoall sendbuf sendcount recvbuf recvcount comm =
     , +
     } -> `Request' return*#}
 
-ibcast :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+ibcast :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
           p a -> Count -> Rank -> Comm -> IO Request
 ibcast buf count root comm =
   withPtr buf $ \buf' ->
@@ -775,7 +775,7 @@ ibcast buf count root comm =
     } -> `Request' return*#}
 
 iexscan :: forall a p q.
-           ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+           ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
            p a -> q a -> Count -> Op -> Comm -> IO Request
 iexscan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -795,7 +795,7 @@ iexscan sendbuf recvbuf count op comm =
     } -> `Request' return*#}
 
 igather :: forall a b p q.
-           ( HasPtr p, HasPtr q
+           ( Pointer p, Pointer q
            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
            p a -> Count -> q b -> Count -> Rank -> Comm -> IO Request
 igather sendbuf sendcount recvbuf recvcount root comm =
@@ -849,7 +849,7 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , +
     } -> `Request' return*#}
 
-irecv :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+irecv :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
         p a -> Count -> Rank -> Tag -> Comm -> IO Request
 irecv recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
@@ -867,7 +867,7 @@ irecv recvbuf recvcount recvrank recvtag comm =
     } -> `Request' return*#}
 
 ireduce :: forall a p q.
-           ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+           ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
            p a -> q a -> Count -> Op -> Rank -> Comm -> IO Request
 ireduce sendbuf recvbuf count op rank comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -886,7 +886,7 @@ ireduce sendbuf recvbuf count op rank comm =
     } -> `Request' return*#}
 
 iscan :: forall a p q.
-         ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+         ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
          p a -> q a -> Count -> Op -> Comm -> IO Request
 iscan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -906,7 +906,7 @@ iscan sendbuf recvbuf count op comm =
     } -> `Request' return*#}
 
 iscatter :: forall a b p q.
-            ( HasPtr p, HasPtr q
+            ( Pointer p, Pointer q
             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
             p a -> Count -> q b -> Count -> Rank -> Comm -> IO Request
 iscatter sendbuf sendcount recvbuf recvcount root comm =
@@ -926,7 +926,7 @@ iscatter sendbuf sendcount recvbuf recvcount root comm =
     , +
     } -> `Request' return*#}
 
-isend :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+isend :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
          p a -> Count -> Rank -> Tag -> Comm -> IO Request
 isend sendbuf sendcount sendrank sendtag comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -949,7 +949,7 @@ isend sendbuf sendcount sendrank sendtag comm =
     , +
     } -> `Status' return*#}
 
-recv :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+recv :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
         p a -> Count -> Rank -> Tag -> Comm -> IO Status
 recv recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
@@ -966,7 +966,7 @@ recv recvbuf recvcount recvrank recvtag comm =
     } -> `()' return*-#}
 
 reduce :: forall a p q.
-          ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+          ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
           p a -> q a -> Count -> Op -> Rank -> Comm -> IO ()
 reduce sendbuf recvbuf count op rank comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -984,7 +984,7 @@ reduce sendbuf recvbuf count op rank comm =
     } -> `()' return*-#}
 
 scan :: forall a p q.
-        ( HasPtr p, HasPtr q, Storable a, HasDatatype a) =>
+        ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
         p a -> q a -> Count -> Op -> Comm -> IO ()
 scan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -1003,7 +1003,7 @@ scan sendbuf recvbuf count op comm =
     } -> `()' return*-#}
 
 scatter :: forall a b p q.
-           ( HasPtr p, HasPtr q
+           ( Pointer p, Pointer q
            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
            p a -> Count -> q b -> Count -> Rank -> Comm -> IO ()
 scatter sendbuf sendcount recvbuf recvcount root comm =
@@ -1022,7 +1022,7 @@ scatter sendbuf sendcount recvbuf recvcount root comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-send :: forall a p. (HasPtr p, Storable a, HasDatatype a) =>
+send :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
         p a -> Count -> Rank -> Tag -> Comm -> IO ()
 send sendbuf sendcount sendrank sendtag comm =
   withPtr sendbuf $ \sendbuf' ->
@@ -1044,7 +1044,7 @@ send sendbuf sendcount sendrank sendtag comm =
     } -> `Status' return*#}
 
 sendrecv :: forall a b p q.
-            ( HasPtr p, HasPtr q
+            ( Pointer p, Pointer q
             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
             p a -> Count -> Rank -> Tag ->
             q b -> Count -> Rank -> Tag ->

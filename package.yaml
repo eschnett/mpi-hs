@@ -67,6 +67,7 @@ tests:
     main: Main.hs
     dependencies:
       - base
+      - monad-loops
       - mpi-hs
       - tasty
       - tasty-hunit
