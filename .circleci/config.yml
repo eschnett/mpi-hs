@@ -6,17 +6,17 @@ jobs:
     working_directory: /home/stackage
     steps:
       - checkout
+      - run: |
+          sudo apt update &&
+          sudo apt -y install libopenmpi-dev openmpi-bin
       - restore_cache:
           key: cache-lts-12.13
-      - run: |
-          sudo apt update
-          sudo apt -y install libopenmpi-dev openmpi-bin
       - run: stack build --haddock --test --only-dependencies --no-terminal --system-ghc
       - save_cache:
           key: cache-lts-12.13
           paths:
             - ~/.stack
       - run: |
-          stack build --haddock --test --no-run-tests --no-terminal --system-ghc
-          mpirun --allow-run-as-root --mca btl self,vader -np 3 stack exec $(stack path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite
+          stack build --haddock --test --no-run-tests --no-terminal --system-ghc &&
+          mpirun --allow-run-as-root --mca btl self,vader -np 3 stack exec $(stack path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite &&
           stack install --no-terminal --system-ghc
