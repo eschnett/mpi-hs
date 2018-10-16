@@ -81,11 +81,14 @@
 --   functions could be exposed as well when needed.)
 
 module Control.Distributed.MPI
-  ( -- * Types and constants
+  ( -- * Types, and associated functions constants
 
     -- ** Communicators
     Comm(..)
   , ComparisonResult(..)
+  , commCompare
+  , commRank
+  , commSize
   , commNull
   , commSelf
   , commWorld
@@ -152,6 +155,8 @@ module Control.Distributed.MPI
   , getSource
   , getTag
   -- , statusIgnore
+  , getCount
+  , getElements
 
     -- ** Message tags
   , Tag(..)
@@ -175,11 +180,6 @@ module Control.Distributed.MPI
   , initialized
 
     -- ** Inquiry
-  , commCompare
-  , commRank
-  , commSize
-  , getCount
-  , getElements
   , getLibraryVersion
   , getProcessorName
   , getVersion
@@ -1721,7 +1721,7 @@ sendrecv :: forall a b p q.
          -> Count               -- ^ Number of elements to send
          -> Rank                -- ^ Destination rank
          -> Tag                 -- ^ Sent message tag
-         -> q a                 -- ^ Receive buffer
+         -> q b                 -- ^ Receive buffer
          -> Count               -- ^ Number of elements to receive
          -> Rank                -- ^ Source rank (may be 'anySource')
          -> Tag                 -- ^ Received message tag (may be 'anyTag')
