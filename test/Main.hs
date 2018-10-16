@@ -1,11 +1,11 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
+import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Control.Monad.Loops
 import Data.IORef
-import Data.Maybe
 import Foreign
 import Foreign.C.Types
 import System.Exit
@@ -73,7 +73,9 @@ defaultMain tree =
 
 main :: IO ()
 main = bracket
-  MPI.init
+  (do ts <- MPI.initThread MPI.ThreadMultiple
+      ts >= MPI.ThreadMultiple @? ""
+  )
   (\_ -> MPI.finalize)
   (\_ -> defaultMain tests)
 
@@ -496,7 +498,7 @@ dynamic = testGroup "dynamic"
              do mreq <- readIORef breq
                 case mreq of
                   Nothing -> return False
-                  Just req -> isJust <$> MPI.test req
+                  Just req -> MPI.test_ req
 
        sendreqs <- newIORef []
        let sendMsg dst =
@@ -507,14 +509,13 @@ dynamic = testGroup "dynamic"
                 modifyIORef' sendreqs ((buf, r) :)
        let drainSendQueue =
              do srs <- readIORef sendreqs
-                srs' <- filterM (\(_, r) -> isNothing <$> MPI.test r) srs
+                srs' <- filterM (\(_, r) -> not <$> MPI.test_ r) srs
                 writeIORef sendreqs srs'
        let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
        let recvMsg st =
              do src <- MPI.getSource st
                 buf <- mallocForeignPtr @CInt
                 MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
-                return ()
 
        -- each rank sends to the next
        when (rank == 0) $
@@ -543,7 +544,7 @@ dynamic = testGroup "dynamic"
              do mreq <- readIORef breq
                 case mreq of
                   Nothing -> return False
-                  Just req -> isJust <$> MPI.test req
+                  Just req -> MPI.test_ req
 
        sendreqs <- newIORef []
        let sendMsg dst =
@@ -554,14 +555,13 @@ dynamic = testGroup "dynamic"
                 modifyIORef' sendreqs ((buf, r) :)
        let drainSendQueue =
              do srs <- readIORef sendreqs
-                srs' <- filterM (\(_, r) -> isNothing <$> MPI.test r) srs
+                srs' <- filterM (\(_, r) -> not <$> MPI.test_ r) srs
                 writeIORef sendreqs srs'
        let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
        let recvMsg st =
              do src <- MPI.getSource st
                 buf <- mallocForeignPtr @CInt
                 MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
-                return ()
 
        -- rank r sends to 2*r+1 and 2*r+2
        when (rank == 0) $
@@ -578,6 +578,50 @@ dynamic = testGroup "dynamic"
                              sendMsg (2 * rank + 1)
                              sendMsg (2 * rank + 2)
                              signalDone
+         )
+         checkDone
+  , testCase "multi-threaded" $
+    do rank <- MPI.commRank MPI.commWorld
+       size <- MPI.commSize MPI.commWorld
+
+       breq <- newEmptyMVar
+       let signalDone =
+             do _ <- forkIO $
+                  do req <- MPI.ibarrier MPI.commWorld
+                     whileM_ (not <$> MPI.test_ req) yield
+                     putMVar breq ()
+                return ()
+       let checkDone = not <$> isEmptyMVar breq
+
+       let sendMsg dst =
+             when (dst < size) $
+             do _ <- forkIO $
+                  do buf <- mallocForeignPtr @CInt
+                     withForeignPtr buf $ \ptr -> poke ptr 42
+                     req <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
+                     whileM_ (not <$> MPI.test_ req) yield
+                return ()
+       let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
+       let recvMsg st =
+             do src <- MPI.getSource st
+                buf <- mallocForeignPtr @CInt
+                MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
+
+       -- rank r sends to 2*r+1 and 2*r+2
+       when (rank == 0) $
+         do sendMsg (2 * rank + 1)
+            sendMsg (2 * rank + 2)
+            signalDone
+
+       untilM_
+         (do mst <- checkForMsg
+             case mst of
+               Nothing -> return ()
+               Just st -> do recvMsg st
+                             sendMsg (2 * rank + 1)
+                             sendMsg (2 * rank + 2)
+                             signalDone
+             yield
          )
          checkDone
   ]

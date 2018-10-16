@@ -11,10 +11,10 @@ enum ComparisonResult {
 };
 
 enum ThreadSupport {
-  Single = MPI_THREAD_SINGLE,
-  Funneled = MPI_THREAD_FUNNELED,
-  Serialized = MPI_THREAD_SERIALIZED,
-  Multiple = MPI_THREAD_MULTIPLE
+  ThreadSingle = MPI_THREAD_SINGLE,
+  ThreadFunneled = MPI_THREAD_FUNNELED,
+  ThreadSerialized = MPI_THREAD_SERIALIZED,
+  ThreadMultiple = MPI_THREAD_MULTIPLE
 };
 
 // Comm

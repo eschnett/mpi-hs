@@ -92,6 +92,7 @@ module Control.Distributed.MPI
   , finalized
   , gather
   , getCount
+  , getElements
   , getLibraryVersion
   , getProcessorName
   , getVersion
@@ -325,7 +326,7 @@ unitTag = toTag ()
 
 
 
-{#enum ThreadSupport {underscoreToCase} deriving (Eq, Ord, Read, Show)#}
+{#enum ThreadSupport {} deriving (Eq, Ord, Read, Show)#}
 
 
 
@@ -651,6 +652,12 @@ gather sendbuf sendcount recvbuf recvcount root comm =
               root comm
 
 {#fun unsafe Get_count as ^
+    { withStatus* `Status'
+    , withDatatype* %`Datatype'
+    , alloca- `Int' peekInt*
+    } -> `()' return*-#}
+
+{#fun unsafe Get_elements as ^
     { withStatus* `Status'
     , withDatatype* %`Datatype'
     , alloca- `Int' peekInt*
