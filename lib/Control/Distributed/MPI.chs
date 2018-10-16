@@ -111,13 +111,17 @@ module Control.Distributed.MPI
   , iscatter
   , isend
   , probe
+  , probe_
   , recv
+  , recv_
   , reduce
   , scan
   , scatter
   , send
   , sendrecv
+  , sendrecv_
   , test
+  , test_
   , wait
   , wait_
   ) where
@@ -488,7 +492,7 @@ instance HasDatatype a => HasDatatype (Semigroup.Min a) where
 
 {#fun pure mpihs_get_status_ignore as statusIgnore {} -> `Status'#}
 
-withStatusIgnore :: (Ptr Status -> IO ()) -> IO ()
+withStatusIgnore :: (Ptr Status -> IO a) -> IO a
 withStatusIgnore = withStatus statusIgnore
 
 
@@ -939,6 +943,13 @@ isend sendbuf sendcount sendrank sendtag comm =
     , +
     } -> `Status' return*#}
 
+{#fun Probe as probe_
+    { fromRank `Rank'
+    , fromTag `Tag'
+    , withComm* %`Comm'
+    , withStatusIgnore- `Status'
+    } -> `()' return*-#}
+
 {#fun Recv as recvTyped
     { id `Ptr ()'
     , fromCount `Count'
@@ -954,6 +965,22 @@ recv :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
 recv recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
   recvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
+
+{#fun Recv as recvTyped_
+    { id `Ptr ()'
+    , fromCount `Count'
+    , withDatatype* %`Datatype'
+    , fromRank `Rank'
+    , fromTag `Tag'
+    , withComm* %`Comm'
+    , withStatusIgnore- `Status'
+    } -> `()' return*-#}
+
+recv_ :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
+         p a -> Count -> Rank -> Tag -> Comm -> IO ()
+recv_ recvbuf recvcount recvrank recvtag comm =
+  withPtr recvbuf $ \recvbuf' ->
+  recvTyped_ (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
 
 {#fun Reduce as reduceTyped
     { id `Ptr ()'
@@ -1058,6 +1085,36 @@ sendrecv sendbuf sendcount sendrank sendtag
                 (castPtr recvbuf') recvcount (datatype @b) recvrank recvtag
                 comm
 
+{#fun Sendrecv as sendrecvTyped_
+    { id `Ptr ()'
+    , fromCount `Count'
+    , withDatatype* %`Datatype'
+    , fromRank `Rank'
+    , fromTag `Tag'
+    , id `Ptr ()'
+    , fromCount `Count'
+    , withDatatype* %`Datatype'
+    , fromRank `Rank'
+    , fromTag `Tag'
+    , withComm* %`Comm'
+    , withStatusIgnore- `Status'
+    } -> `()' return*-#}
+
+sendrecv_ :: forall a b p q.
+             ( Pointer p, Pointer q
+             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
+             p a -> Count -> Rank -> Tag ->
+             q b -> Count -> Rank -> Tag ->
+             Comm -> IO ()
+sendrecv_ sendbuf sendcount sendrank sendtag
+          recvbuf recvcount recvrank recvtag
+          comm =
+  withPtr sendbuf $ \sendbuf' ->
+  withPtr recvbuf $ \recvbuf' ->
+  sendrecvTyped_ (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag
+                 (castPtr recvbuf') recvcount (datatype @b) recvrank recvtag
+                 comm
+
 testBool :: Request -> IO (Bool, Status)
 testBool req =
   withRequest req $ \req' ->
@@ -1070,6 +1127,20 @@ testBool req =
 
 test :: Request -> IO (Maybe Status)
 test req = bool2maybe <$> testBool req
+
+-- {#fun Test as test_
+--     { withRequest* `Request'
+--     , alloca- `Bool' peekBool*
+--     , withStatusIgnore- `Status'
+--     } -> `()' return*-#}
+
+test_ :: Request -> IO Bool
+test_ req =
+  withRequest req $ \req' ->
+  alloca $ \flag ->
+  withStatusIgnore $ \st ->
+  do _ <- {#call Test as test__#} req' flag st
+     peekBool flag
 
 {#fun Wait as ^
     { withRequest* `Request'

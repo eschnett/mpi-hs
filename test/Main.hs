@@ -513,7 +513,7 @@ dynamic = testGroup "dynamic"
        let recvMsg st =
              do src <- MPI.getSource st
                 buf <- mallocForeignPtr @CInt
-                _ <- MPI.recv buf 1 src MPI.unitTag MPI.commWorld
+                MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
                 return ()
 
        -- each rank sends to the next
@@ -560,7 +560,7 @@ dynamic = testGroup "dynamic"
        let recvMsg st =
              do src <- MPI.getSource st
                 buf <- mallocForeignPtr @CInt
-                _ <- MPI.recv buf 1 src MPI.unitTag MPI.commWorld
+                MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
                 return ()
 
        -- rank r sends to 2*r+1 and 2*r+2
