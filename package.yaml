@@ -1,10 +1,11 @@
 name: mpi-hs
-version: '0.1.0.0'
+version: '0.1.0.1'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter"
 maintainer: "Erik Schnetter"
 synopsis: MPI bindings for Haskell
+category: Distributed Computing
 
 extra-source-files:
   - LICENSE
