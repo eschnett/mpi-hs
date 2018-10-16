@@ -47,6 +47,38 @@
 -- serialized.
 --
 -- This module 'MPI' is the low-level interface.
+--
+-- In general, the MPI C API is translated to Haskell in the following
+-- way, greatly aided by @c2hs@:
+--
+-- * Names of constants and functions have the @MPI_@ prefix removed.
+--   Underscores are replaced by CamelCase. The 'MPI' module is
+--   intended to be imported qualified, as in 'import qualified
+--   Control.Distributed.MPI as MPI'.
+--
+-- * Opaque types such as @MPI_Request@ are wrapped via newtypes
+--   holding pointers and are allocated on the heap as foreign
+--   pointers.
+--
+-- * The MPI error return code is omitted. Currently error codes are
+--   ignored, since the default MPI behaviour is to terminate the
+--   application instead of actually returning error codes. In the
+--   future, error codes might be reported via exceptions.
+--
+-- * Output arguments that are written via pointers in C are returned.
+--   Some functions now return tuples. If the output argument is a
+--   boolean value that indicates whether another output argument is
+--   value, then this is translated into a 'Maybe'.
+--
+-- * MPI has a facility to pass @MPI_STATUS_IGNORE@ to indicate that
+--   no message status should be returned. This is instead handled by
+--   providing alternative functions ending with an underscore (e.g.
+--   'recv_') that return @()@ instead of 'Status'.
+--
+-- * Datatype arguments are hidden. Instead, the correct MPI datatypes
+--   are inferred from the pointer type specifying the communication
+--   buffers. (This translation could be relaxed, and the original MPI
+--   functions could be exposed as well when needed.)
 
 module Control.Distributed.MPI
   ( Comm(..)
@@ -143,6 +175,7 @@ module Control.Distributed.MPI
   , initThread
   , initialized
   , iprobe
+  , iprobe_
   , irecv
   , ireduce
   , iscan
@@ -389,12 +422,12 @@ deriving instance Show Status
 -- statusError (Status mst) =
 --   Error $ {#get MPI_Status.MPI_ERROR#} mst
 
--- | Get the source rank of a message.
+-- | Get the source rank of a message (@MPI_SOURCE@).
 getSource :: Status -> IO Rank
 getSource (Status fst) =
   withForeignPtr fst (\pst -> Rank <$> {#get MPI_Status->MPI_SOURCE#} pst)
 
--- | Get the message tag.
+-- | Get the message tag (@MPI_TAG@).
 getTag :: Status -> IO Tag
 getTag (Status fst) =
   withForeignPtr fst (\pst -> Tag <$> {#get MPI_Status->MPI_TAG#} pst)
@@ -424,19 +457,21 @@ unitTag = toTag ()
 
 
 
--- | Thread support levels for MPI.
+-- | Thread support levels for MPI (see 'initThread'):
 --
--- * 'ThreadSingle': The application must be single-threaded
+-- * 'ThreadSingle' (@MPI_THREAD_SINGLE@): The application must be
+-- * single-threaded
 --
--- * 'ThreadFunneled': The application might be multi-threaded, but
---   only a single thread will call MPI
+-- * 'ThreadFunneled' (@MPI_THREAD_FUNNELED@): The application might
+--   be multi-threaded, but only a single thread will call MPI
 --
--- * 'ThreadSerialized': The application might be multi-threaded, but
---   the application guarantees that only one thread at a time will
---   call MPI
+-- * 'ThreadSerialized' (@MPI_THREAD_SERIALIZED@): The application
+--   might be multi-threaded, but the application guarantees that only
+--   one thread at a time will call MPI
 --
--- * 'ThreadMultiple': The application is multi-threaded, and
---   different threads might call MPI at the same time
+-- * 'ThreadMultiple' (@MPI_THREAD_MULTIPLE@): The application is
+--   multi-threaded, and different threads might call MPI at the same
+--   time
 {#enum ThreadSupport {} deriving (Eq, Ord, Read, Show)#}
 
 -- | When MPI is initialized with this library, then it will remember
@@ -452,21 +487,22 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
 
 --------------------------------------------------------------------------------
 
--- | A null (invalid) communicator.
+-- | A null (invalid) communicator (@MPI_COMM_NULL@).
 {#fun pure mpihs_get_comm_null as commNull {+} -> `Comm'#}
 
--- | The self communicator. Each process has its own self communicator
--- that includes only this process.
+-- | The self communicator (@MPI_COMM_SELF@). Each process has its own
+-- self communicator that includes only this process.
 {#fun pure mpihs_get_comm_self as commSelf {+} -> `Comm'#}
 
--- | The world communicator, which includes all processes.
+-- | The world communicator, which includes all processes
+-- (@MPI_COMM_WORLD@).
 {#fun pure mpihs_get_comm_world as commWorld {+} -> `Comm'#}
 
 
 
 -- | Error value returned by 'getCount' if the message is too large,
 -- or if the message size is not an integer multiple of the provided
--- datatype.
+-- datatype (@MPI_UNDEFINED@).
 {#fun pure mpihs_get_undefined as countUndefined {} -> `Count' toCount#}
 
 
@@ -613,7 +649,7 @@ instance HasDatatype CUShort where datatype = datatypeUnsignedShort
 
 
 
--- | A null (invalid) reduction operation.
+-- | A null (invalid) reduction operation (@MPI_OP_NULL@).
 {#fun pure mpihs_get_op_null as opNull {+} -> `Op'#}
 
 -- | The bitwise and @(.&.)@ reduction operation (@MPI_BAND@).
@@ -676,14 +712,14 @@ instance HasDatatype a => HasDatatype (Semigroup.Min a) where
 
 
 -- | Rank placeholder to specify that a message can be received from
--- any source. When calling 'probe' or 'recv' (or 'iprobe' or 'irecv')
--- with 'anySource' as source, the actual source can be determined
--- from the returned message status via 'getSource'.
+-- any source (@MPI_ANY_SOURCE@). When calling 'probe' or 'recv' (or
+-- 'iprobe' or 'irecv') with 'anySource' as source, the actual source
+-- can be determined from the returned message status via 'getSource'.
 {#fun pure mpihs_get_any_source as anySource {} -> `Rank' toRank#}
 
 
 
--- | A null (invalid) request.
+-- | A null (invalid) request (@MPI_REQUEST_NULL@).
 {#fun pure mpihs_get_request_null as requestNull {+} -> `Request'#}
 
 
@@ -695,17 +731,18 @@ withStatusIgnore = withStatus statusIgnore
 
 
 
--- | Tag placeholder to specify that a message can have any tag. When
--- calling 'probe' or 'recv' (or 'iprobe' or 'irecv') with 'anyTag' as
--- tag, the actual tag can be determined from the returned message
--- status via 'getTag'.
+-- | Tag placeholder to specify that a message can have any tag
+-- (@MPI_ANY_TAG@). When calling 'probe' or 'recv' (or 'iprobe' or
+-- 'irecv') with 'anyTag' as tag, the actual tag can be determined
+-- from the returned message status via 'getTag'.
 {#fun pure mpihs_get_any_tag as anyTag {} -> `Tag' toTag#}
 
 
 
 --------------------------------------------------------------------------------
 
--- | Terminate MPI execution environment (@MPI_Abort@).
+-- | Terminate MPI execution environment
+-- (@[MPI_Abort](https://www.open-mpi.org/doc/current/man3/MPI_Abort.3.php)@).
 {#fun Abort as ^
     { withComm* %`Comm' -- ^ Communicator describing which processes
                         -- to terminate
@@ -723,8 +760,10 @@ withStatusIgnore = withStatus statusIgnore
     } -> `()' return*-#}
 
 -- | Gather data from all processes and broadcast the result
--- (@MPI_Allgather@). The MPI datatypes are determined automatically
--- from the buffer pointer types.
+-- (collective,
+-- @[MPI_Allgather](https://www.open-mpi.org/doc/current/man3/MPI_Allgather.3.php)@).
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 allgather :: forall a b p q.
              ( Pointer p, Pointer q
              , Storable a, HasDatatype a, Storable b, HasDatatype b)
@@ -751,8 +790,10 @@ allgather sendbuf sendcount recvbuf recvcount comm =
     } -> `()' return*-#}
 
 -- | Reduce data from all processes and broadcast the result
--- (@MPI_Allreduce@). The MPI datatype is determined automatically
--- from the buffer pointer types.
+-- (collective,
+-- @[MPI_Allreduce](https://www.open-mpi.org/doc/current/man3/MPI_Allreduce.3.php)@).
+-- The MPI datatype is determined automatically from the buffer
+-- pointer types.
 allreduce :: forall a p q.
              ( Pointer p, Pointer q, Storable a, HasDatatype a)
           => p a                -- ^ Source buffer
@@ -777,7 +818,8 @@ allreduce sendbuf recvbuf count op comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
--- | Send data from all processes to all processes (@MPI_Alltoall@).
+-- | Send data from all processes to all processes (collective,
+-- @[MPI_Alltoall](https://www.open-mpi.org/doc/current/man3/MPI_Alltoall.php)@).
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 alltoall :: forall a b p q.
@@ -796,7 +838,8 @@ alltoall sendbuf sendcount recvbuf recvcount comm =
                 (castPtr recvbuf') recvcount (datatype @b)
                 comm
 
--- | Barrier.
+-- | Barrier (collective,
+-- @[MPI_Barrier](https://www.open-mpi.org/doc/current/man3/MPI_Barrier.3.php)@).
 {#fun Barrier as ^
     { withComm* %`Comm'         -- ^ Communicator
     } -> `()' return*-#}
@@ -809,7 +852,8 @@ alltoall sendbuf sendcount recvbuf recvcount comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
--- | Broadcast data from one process to all processes (@MPI_Bcast@).
+-- | Broadcast data from one process to all processes (collective,
+-- @[MPI_Bcast](https://www.open-mpi.org/doc/current/man3/MPI_Bcast.3.php)@).
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
 bcast :: forall a p. (Pointer p, Storable a, HasDatatype a)
@@ -823,19 +867,25 @@ bcast buf count root comm =
   withPtr buf $ \buf' ->
   bcastTyped (castPtr buf') count (datatype @a) root comm
 
+-- | Compare two communicators
+-- (@[MPI_Comm_compare](https://www.open-mpi.org/doc/current/man3/MPI_Comm_compare.3.php)@).
 {#fun unsafe Comm_compare as ^
-    { withComm* %`Comm'
-    , withComm* %`Comm'
+    { withComm* %`Comm'         -- ^ Communicator
+    , withComm* %`Comm'         -- ^ Other communicator
     , alloca- `ComparisonResult' peekEnum*
     } -> `()' return*-#}
 
+-- | Return this process's rank in a communicator
+-- (@[MPI_Comm_rank](https://www.open-mpi.org/doc/current/man3/MPI_Comm_rank.3.php)@).
 {#fun unsafe Comm_rank as ^
-    { withComm* %`Comm'
+    { withComm* %`Comm'         -- ^ Communicator
     , alloca- `Rank' peekCoerce*
     } -> `()' return*-#}
 
+-- | Return the number of processes in a communicator
+-- (@[MPI_Comm_size](https://www.open-mpi.org/doc/current/man3/MPI_Comm_size.3.php)@).
 {#fun unsafe Comm_size as ^
-    { withComm* %`Comm'
+    { withComm* %`Comm'         -- ^ Communicator
     , alloca- `Rank' peekCoerce*
     } -> `()' return*-#}
 
@@ -848,16 +898,35 @@ bcast buf count root comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Reduce data from all processes via an exclusive (prefix) scan
+-- (collective,
+-- @[MPI_Exscan](https://www.open-mpi.org/doc/current/man3/MPI_Exscan.3.php)@).
+-- Each process with rank @r@ receives the result of reducing data
+-- from rank @0@ to rank @r-1@ (inclusive). Rank 0 should logically
+-- receive a neutral element of the reduction operation, but instead
+-- receives an undefined value since MPI is not aware of neutral
+-- values for reductions.
+--
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type.
 exscan :: forall a p q.
-          ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-          p a -> q a -> Count -> Op -> Comm -> IO ()
+          ( Pointer p, Pointer q, Storable a, HasDatatype a)
+       => p a                   -- ^ Source buffer
+       -> q a                   -- ^ Destination buffer
+       -> Count                 -- ^ Number of elements
+       -> Op                    -- ^ Reduction operation
+       -> Comm                  -- ^ Communicator
+       -> IO ()
 exscan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
   exscanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
 
+-- | Finalize (shut down) the MPI library (collective, @[MPI_Finalize](https://www.open-mpi.org/doc/current/man3/MPI_Finalize.3.php)@).
 {#fun Finalize as ^ {} -> `()' return*-#}
 
+-- | Return whether the MPI library has been finalized
+-- (@[MPI_Finalized](https://www.open-mpi.org/doc/current/man3/MPI_Finalized.3.php)@).
 {#fun Finalized as ^ {alloca- `Bool' peekBool*} -> `()' return*-#}
 
 {#fun Gather as gatherTyped
@@ -871,10 +940,21 @@ exscan sendbuf recvbuf count op comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Gather data from all processes to the root process (collective,
+-- @[MPI_Gather](https://www.open-mpi.org/doc/current/man3/MPI_Gather.3.php)@).
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 gather :: forall a b p q.
           ( Pointer p, Pointer q
-          , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-          p a -> Count -> q b -> Count -> Rank -> Comm -> IO ()
+          , Storable a, HasDatatype a, Storable b, HasDatatype b)
+       => p a                   -- ^ Source buffer
+       -> Count                 -- ^ Number of source elements
+       -> q b  -- ^ Destination buffer (only used on the root process)
+       -> Count -- ^ Number of destination elements (only used on the
+                -- root process)
+       -> Rank                  -- ^ Root rank
+       -> Comm                  -- ^ Communicator
+       -> IO ()
 gather sendbuf sendcount recvbuf recvcount root comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -882,19 +962,25 @@ gather sendbuf sendcount recvbuf recvcount root comm =
               (castPtr recvbuf') recvcount (datatype @b)
               root comm
 
--- | Get the size of a message, in terms of objects of type 'Datatype'.
+-- | Get the size of a message, in terms of objects of type 'Datatype'
+-- (@[MPI_Get_count](https://www.open-mpi.org/doc/current/man3/MPI_Get_count.3.php)@).
+-- To determine the MPI datatype for a given Haskell type, use
+-- 'datatype' (call e.g. as 'datatype @CInt').
 {#fun unsafe Get_count as ^
-    { withStatus* `Status'
-    , withDatatype* %`Datatype'
+    { withStatus* `Status'      -- ^ Message status
+    , withDatatype* %`Datatype' -- ^ MPI datatype
     , alloca- `Int' peekInt*
     } -> `()' return*-#}
 
 -- | Get the number of elements in message, in terms of sub-object of
--- the type 'datatype'. This is useful when a message contains partial
--- objects of type 'datatype'.
+-- the type 'datatype'
+-- (@[MPI_Get_elements](https://www.open-mpi.org/doc/current/man3/MPI_Get_elements.3.php)@).
+-- This is useful when a message contains partial objects of type
+-- 'datatype'. To determine the MPI datatype for a given Haskell type,
+-- use 'datatype' (call e.g. as 'datatype @CInt').
 {#fun unsafe Get_elements as ^
-    { withStatus* `Status'
-    , withDatatype* %`Datatype'
+    { withStatus* `Status'      -- ^ Message status
+    , withDatatype* %`Datatype' -- ^ MPI datatype
     , alloca- `Int' peekInt*
     } -> `()' return*-#}
 
@@ -903,6 +989,10 @@ gather sendbuf sendcount recvbuf recvcount root comm =
     , alloca- `Int' peekInt*
     } -> `()' return*-#}
 
+-- | Return the version of the MPI library
+-- (@[MPI_Get_library_version](https://www.open-mpi.org/doc/current/man3/MPI_Get_library_version.3.php)@).
+-- Note that the version of the MPI standard that this library
+-- implements is returned by 'getVersion'.
 getLibraryVersion :: IO String
 getLibraryVersion =
   do buf <- mallocForeignPtrBytes {#const MPI_MAX_LIBRARY_VERSION_STRING#}
@@ -916,6 +1006,10 @@ getLibraryVersion =
     , alloca- `Int' peekInt*
     } -> `()' return*-#}
 
+-- | Return the name of the current process
+-- (@[MPI_Get_Processor_name](https://www.open-mpi.org/doc/current/man3/MPI_Get_processor_name.3.php)@).
+-- This should uniquely identify the hardware on which this process is
+-- running.
 getProcessorName :: IO String
 getProcessorName =
   do buf <- mallocForeignPtrBytes {#const MPI_MAX_PROCESSOR_NAME#}
@@ -929,6 +1023,11 @@ getProcessorName =
     , alloca- `Int' peekInt*
     } -> `()' return*-#}
 
+-- | Return the version of the MPI standard implemented by this
+-- library
+-- (@[MPI_Get_version](https://www.open-mpi.org/doc/current/man3/MPI_Get_version.3.php)@).
+-- Note that the version of the MPI library itself is returned by
+-- 'getLibraryVersion'.
 getVersion :: IO Version
 getVersion =
   do (major, minor) <- getVersion_
@@ -945,10 +1044,22 @@ getVersion =
     , +
     } -> `Request' return*#}
 
+-- | Begin to gather data from all processes and broadcast the result,
+-- and return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Iallgather](https://www.open-mpi.org/doc/current/man3/MPI_Iallgather.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 iallgather :: forall a b p q.
               ( Pointer p, Pointer q
-              , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-              p a -> Count -> q b -> Count -> Comm -> IO Request
+              , Storable a, HasDatatype a, Storable b, HasDatatype b)
+           => p a               -- ^ Source buffer
+           -> Count             -- ^ Number of source elements
+           -> q b               -- ^ Destination buffer
+           -> Count             -- ^ Number of destination elements
+           -> Comm              -- ^ Communicator
+           -> IO Request        -- ^ Communication request
 iallgather sendbuf sendcount recvbuf recvcount comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -966,9 +1077,21 @@ iallgather sendbuf sendcount recvbuf recvcount comm =
     , +
     } -> `Request' return*#}
 
+-- | Begin to reduce data from all processes and broadcast the result,
+-- and return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Iallreduce](https://www.open-mpi.org/doc/current/man3/MPI_Iallreduce.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatype is determined automatically from the buffer
+-- pointer types.
 iallreduce :: forall a p q.
-              ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-              p a -> q a -> Count -> Op -> Comm -> IO Request
+              ( Pointer p, Pointer q, Storable a, HasDatatype a)
+           => p a               -- ^ Source buffer
+           -> q a               -- ^ Destination buffer
+           -> Count             -- ^ Number of elements
+           -> Op                -- ^ Reduction operation
+           -> Comm              -- ^ Communicator
+           -> IO Request        -- ^ Communication request
 iallreduce sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -986,10 +1109,22 @@ iallreduce sendbuf recvbuf count op comm =
     , +
     } -> `Request' return*#}
 
+-- | Begin to send data from all processes to all processes, and
+-- return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Ialltoall](https://www.open-mpi.org/doc/current/man3/MPI_Ialltoall.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 ialltoall :: forall a b p q.
              ( Pointer p, Pointer q
-             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-             p a -> Count -> q b -> Count -> Comm -> IO Request
+             , Storable a, HasDatatype a, Storable b, HasDatatype b)
+          => p a                -- ^ Source buffer
+          -> Count              -- ^ Number of source elements
+          -> q b                -- ^ Destination buffer
+          -> Count              -- ^ Number of destination elements
+          -> Comm               -- ^ Communicator
+          -> IO Request         -- ^ Communication request
 ialltoall sendbuf sendcount recvbuf recvcount comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -997,8 +1132,12 @@ ialltoall sendbuf sendcount recvbuf recvcount comm =
                  (castPtr recvbuf') recvcount (datatype @b)
                  comm
 
+-- | Start a barrier, and return a handle to the communication request
+-- (collective, non-blocking,
+-- @[MPI_Ibarrier](https://www.open-mpi.org/doc/current/man3/MPI_Ibarrier.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
 {#fun Ibarrier as ^
-    { withComm* %`Comm'
+    { withComm* %`Comm'         -- ^ Communicator
     , +
     } -> `Request' return*#}
 
@@ -1011,8 +1150,20 @@ ialltoall sendbuf sendcount recvbuf recvcount comm =
     , +
     } -> `Request' return*#}
 
-ibcast :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
-          p a -> Count -> Rank -> Comm -> IO Request
+-- | Begin to broadcast data from one process to all processes, and
+-- return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Ibcast](https://www.open-mpi.org/doc/current/man3/MPI_Ibcast.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type.
+ibcast :: forall a p. (Pointer p, Storable a, HasDatatype a)
+       => p a -- ^ Buffer pointer (read on the root process, written on
+              -- all other processes)
+       -> Count                 -- ^ Number of elements
+       -> Rank                  -- ^ Root rank (sending process)
+       -> Comm                  -- ^ Communicator
+       -> IO Request            -- ^ Communication request
 ibcast buf count root comm =
   withPtr buf $ \buf' ->
   ibcastTyped (castPtr buf') count (datatype @a) root comm
@@ -1027,9 +1178,27 @@ ibcast buf count root comm =
     , +
     } -> `Request' return*#}
 
+-- | Begin to reduce data from all processes via an exclusive (prefix)
+-- scan, and return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Iexscan](https://www.open-mpi.org/doc/current/man3/MPI_Iexscan.3.php)@).
+-- Each process with rank @r@ receives the result of reducing data
+-- from rank @0@ to rank @r-1@ (inclusive). Rank 0 should logically
+-- receive a neutral element of the reduction operation, but instead
+-- receives an undefined value since MPI is not aware of neutral
+-- values for reductions.
+--
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type.
 iexscan :: forall a p q.
-           ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-           p a -> q a -> Count -> Op -> Comm -> IO Request
+           ( Pointer p, Pointer q, Storable a, HasDatatype a)
+        => p a                  -- ^ Source buffer
+        -> q a                  -- ^ Destination buffer
+        -> Count                -- ^ Number of elements
+        -> Op                   -- ^ Reduction operation
+        -> Comm                 -- ^ Communicator
+        -> IO Request           -- ^ Communication request
 iexscan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1047,10 +1216,25 @@ iexscan sendbuf recvbuf count op comm =
     , +
     } -> `Request' return*#}
 
+-- | Begin to gather data from all processes to the root process, and
+-- return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Igather](https://www.open-mpi.org/doc/current/man3/MPI_Igather.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 igather :: forall a b p q.
            ( Pointer p, Pointer q
-           , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-           p a -> Count -> q b -> Count -> Rank -> Comm -> IO Request
+           , Storable a, HasDatatype a, Storable b, HasDatatype b)
+        => p a                  -- ^ Source buffer
+        -> Count                -- ^ Number of source elements
+        -> q b                  -- ^ Destination buffer (relevant only
+                                -- on the root process)
+        -> Count                -- ^ Number of destination elements
+                                -- (relevant only on the root process)
+        -> Rank                 -- ^ Root rank
+        -> Comm                 -- ^ Communicator
+        -> IO Request           -- ^ Communication request
 igather sendbuf sendcount recvbuf recvcount root comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1058,6 +1242,8 @@ igather sendbuf sendcount recvbuf recvcount root comm =
                (castPtr recvbuf') recvcount (datatype @b)
                root comm
 
+-- | Return whether the MPI library has been initialized
+-- (@[MPI_Initialized](https://www.open-mpi.org/doc/current/man3/MPI_Initialized.3.php)@).
 {#fun unsafe Initialized as ^ {alloca- `Bool' peekBool*} -> `()' return*-#}
 
 {#fun Init as init_
@@ -1065,6 +1251,9 @@ igather sendbuf sendcount recvbuf recvcount root comm =
     , with* `Ptr CString'
     } -> `()' return*-#}
 
+-- | Initialize the MPI library (collective,
+-- @[MPI_Init](https://www.open-mpi.org/doc/current/man3/MPI_Init.3.php)@).
+-- This corresponds to calling 'initThread' 'ThreadSingle'.
 init :: IO ()
 init = do init_ argc argv
           writeIORef providedThreadSupport (Just ThreadSingle)
@@ -1076,7 +1265,12 @@ init = do init_ argc argv
     , alloca- `ThreadSupport' peekEnum*
     } -> `()' return*-#}
 
-initThread :: ThreadSupport -> IO ThreadSupport
+-- | Initialize the MPI library (collective,
+-- @[MPI_Init_thread](https://www.open-mpi.org/doc/current/man3/MPI_Init_thread.3.php)@).
+-- Note that the provided level of thread support might be less than
+-- (!) the required level.
+initThread :: ThreadSupport    -- ^ required level of thread support
+           -> IO ThreadSupport -- ^ provided level of thread support
 initThread ts = do ts' <- initThread_ argc argv ts
                    writeIORef providedThreadSupport (Just ts')
                    return ts'
@@ -1092,8 +1286,31 @@ iprobeBool rank tag comm =
                b <- peekBool flag
                return (b, st)
 
-iprobe :: Rank -> Tag -> Comm -> IO (Maybe Status)
+-- | Probe (check) for incoming messages without waiting
+-- (non-blocking,
+-- @[MPI_Iprobe](https://www.open-mpi.org/doc/current/man3/MPI_Iprobe.3.php)@).
+iprobe :: Rank                  -- ^ Source rank (may be 'anySource')
+       -> Tag                   -- ^ Message tag (may be 'anyTag')
+       -> Comm                  -- ^ Communicator
+       -> IO (Maybe Status) -- ^ 'Just' 'Status' of the message if a
+                            -- message is available, else 'Nothing'
 iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
+
+-- | Probe (check) for an incoming message without waiting
+-- (@[MPI_Iprobe](https://www.open-mpi.org/doc/current/man3/MPI_Iprobe.3.php)@).
+-- This function does not return a status, which might be more
+-- efficient if the status is not needed.
+iprobe_ :: Rank                 -- ^ Source rank (may be 'anySource')
+        -> Tag                  -- ^ Message tag (may be 'anyTag')
+        -> Comm                 -- ^ Communicator
+        -> IO Bool              -- ^ Whether a message is available
+iprobe_ rank tag comm =
+  withComm comm $ \comm' ->
+  do withStatusIgnore $ \st ->
+       do alloca $ \flag ->
+            do _ <- {#call mpihs_iprobe as iprobe__#}
+                    (fromRank rank) (fromTag tag) comm' flag st
+               peekBool flag
 
 {#fun Irecv as irecvTyped
     { id `Ptr ()'
@@ -1105,8 +1322,19 @@ iprobe rank tag comm = bool2maybe <$> iprobeBool rank tag comm
     , +
     } -> `Request' return*#}
 
-irecv :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
-        p a -> Count -> Rank -> Tag -> Comm -> IO Request
+-- | Begin to receive a message, and return a handle to the
+-- communication request (non-blocking,
+-- @[MPI_Irecv](https://www.open-mpi.org/doc/current/man3/MPI_Irecv.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type.
+irecv :: forall a p. (Pointer p, Storable a, HasDatatype a)
+      => p a                    -- ^ Receive buffer
+      -> Count                  -- ^ Number of elements to receive
+      -> Rank                   -- ^ Source rank (may be 'anySource')
+      -> Tag                    -- ^ Message tag (may be 'anyTag')
+      -> Comm                   -- ^ Communicator
+      -> IO Request             -- ^ Communication request
 irecv recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
   irecvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
@@ -1122,9 +1350,21 @@ irecv recvbuf recvcount recvrank recvtag comm =
     , +
     } -> `Request' return*#}
 
+-- | Begin to reduce data from all processes, and return a handle to
+-- the communication request (collective, non-blocking,
+-- @[MPI_Ireduce](https://www.open-mpi.org/doc/current/man3/MPI_Ireduce.3.php)@).
+-- The result is only available on the root process. The request must
+-- be freed by calling 'test', 'wait', or similar. The MPI datatypes
+-- are determined automatically from the buffer pointer types.
 ireduce :: forall a p q.
-           ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-           p a -> q a -> Count -> Op -> Rank -> Comm -> IO Request
+           ( Pointer p, Pointer q, Storable a, HasDatatype a)
+        => p a                  -- ^ Source buffer
+        -> q a                  -- ^ Destination buffer
+        -> Count                -- ^ Number of elements
+        -> Op                   -- ^ Reduction operation
+        -> Rank                 -- ^ Root rank
+        -> Comm                 -- ^ Communicator
+        -> IO Request           -- ^ Communication request
 ireduce sendbuf recvbuf count op rank comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1141,9 +1381,22 @@ ireduce sendbuf recvbuf count op rank comm =
     , +
     } -> `Request' return*#}
 
+-- | Begin to reduce data from all processes via an (inclusive) scan,
+-- and return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Iscan](https://www.open-mpi.org/doc/current/man3/MPI_Iscan.3.php)@).
+-- Each process with rank @r@ receives the result of reducing data
+-- from rank @0@ to rank @r@ (inclusive). The request must be freed by
+-- calling 'test', 'wait', or similar. The MPI datatype is determined
+-- automatically from the buffer pointer type.
 iscan :: forall a p q.
-         ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-         p a -> q a -> Count -> Op -> Comm -> IO Request
+         ( Pointer p, Pointer q, Storable a, HasDatatype a)
+      => p a                    -- ^ Source buffer
+      -> q a                    -- ^ Destination buffer
+      -> Count                  -- ^ Number of elements
+      -> Op                     -- ^ Reduction operation
+      -> Comm                   -- ^ Communicator
+      -> IO Request             -- ^ Communication request
 iscan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1161,10 +1414,23 @@ iscan sendbuf recvbuf count op comm =
     , +
     } -> `Request' return*#}
 
+-- | Begin to scatter data from the root process to all processes, and
+-- return a handle to the communication request (collective,
+-- non-blocking,
+-- @[MPI_Iscatter](https://www.open-mpi.org/doc/current/man3/MPI_Iscatter.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 iscatter :: forall a b p q.
             ( Pointer p, Pointer q
-            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-            p a -> Count -> q b -> Count -> Rank -> Comm -> IO Request
+            , Storable a, HasDatatype a, Storable b, HasDatatype b)
+         => p a     -- ^ Source buffer (only used on the root process)
+         -> Count -- ^ Number of source elements (only used on the root process)
+         -> q b                 -- ^ Destination buffer
+         -> Count               -- ^ Number of destination elements
+         -> Rank                -- ^ Root rank
+         -> Comm                -- ^ Communicator
+         -> IO Request          -- ^ Communication request
 iscatter sendbuf sendcount recvbuf recvcount root comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1182,23 +1448,41 @@ iscatter sendbuf sendcount recvbuf recvcount root comm =
     , +
     } -> `Request' return*#}
 
-isend :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
-         p a -> Count -> Rank -> Tag -> Comm -> IO Request
+-- | Begin to send a message, and return a handle to the
+-- communication request (non-blocking,
+-- @[MPI_Isend](https://www.open-mpi.org/doc/current/man3/MPI_Isend.3.php)@).
+-- The request must be freed by calling 'test', 'wait', or similar.
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type.
+isend :: forall a p. (Pointer p, Storable a, HasDatatype a)
+      => p a                    -- ^ Send buffer
+      -> Count                  -- ^ Number of elements to send
+      -> Rank                   -- ^ Destination rank
+      -> Tag                    -- ^ Message tag
+      -> Comm                   -- ^ Communicator
+      -> IO Request             -- ^ Communication request
 isend sendbuf sendcount sendrank sendtag comm =
   withPtr sendbuf $ \sendbuf' ->
   isendTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag comm
 
+-- | Probe (wait) for an incoming message
+-- (@[MPI_Probe](https://www.open-mpi.org/doc/current/man3/MPI_Probe.3.php)@).
 {#fun Probe as ^
-    { fromRank `Rank'
-    , fromTag `Tag'
-    , withComm* %`Comm'
+    { fromRank `Rank'           -- ^ Source rank (may be 'anySource')
+    , fromTag `Tag'             -- ^ Message tag (may be 'anyTag')
+    , withComm* %`Comm'         -- ^ Communicator
     , +
-    } -> `Status' return*#}
+    } -> `Status' return*       -- ^ Message status
+#}
 
+-- | Probe (wait) for an incoming message
+-- (@[MPI_Probe](https://www.open-mpi.org/doc/current/man3/MPI_Probe.3.php)@).
+-- This function does not return a status, which might be more
+-- efficient if the status is not needed.
 {#fun Probe as probe_
-    { fromRank `Rank'
-    , fromTag `Tag'
-    , withComm* %`Comm'
+    { fromRank `Rank'           -- ^ Source rank (may be 'anySource')
+    , fromTag `Tag'             -- ^ Message tag (may be 'anyTag')
+    , withComm* %`Comm'         -- ^ Communicator
     , withStatusIgnore- `Status'
     } -> `()' return*-#}
 
@@ -1212,8 +1496,17 @@ isend sendbuf sendcount sendrank sendtag comm =
     , +
     } -> `Status' return*#}
 
-recv :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
-        p a -> Count -> Rank -> Tag -> Comm -> IO Status
+-- | Receive a message
+-- (@[MPI_Recv](https://www.open-mpi.org/doc/current/man3/MPI_Recv.3.php)@).
+-- The MPI datatypeis determined automatically from the buffer
+-- pointer type.
+recv :: forall a p. (Pointer p, Storable a, HasDatatype a)
+     => p a                     -- ^ Receive buffer
+     -> Count                   -- ^ Number of elements to receive
+     -> Rank                    -- ^ Source rank (may be 'anySource')
+     -> Tag                     -- ^ Message tag (may be 'anyTag')
+     -> Comm                    -- ^ Communicator
+     -> IO Status               -- ^ Message status
 recv recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
   recvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
@@ -1228,8 +1521,18 @@ recv recvbuf recvcount recvrank recvtag comm =
     , withStatusIgnore- `Status'
     } -> `()' return*-#}
 
-recv_ :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
-         p a -> Count -> Rank -> Tag -> Comm -> IO ()
+-- | Receive a message
+-- (@[MPI_Recv](https://www.open-mpi.org/doc/current/man3/MPI_Recv.3.php)@).
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type. This function does not return a status, which might
+-- be more efficient if the status is not needed.
+recv_ :: forall a p. (Pointer p, Storable a, HasDatatype a)
+      => p a                    -- ^ Receive buffer
+      -> Count                  -- ^ Number of elements to receive
+      -> Rank                   -- ^ Source rank (may be 'anySource')
+      -> Tag                    -- ^ Message tag (may be 'anyTag')
+      -> Comm                   -- ^ Communicator
+      -> IO ()
 recv_ recvbuf recvcount recvrank recvtag comm =
   withPtr recvbuf $ \recvbuf' ->
   recvTyped_ (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
@@ -1244,9 +1547,19 @@ recv_ recvbuf recvcount recvrank recvtag comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Reduce data from all processes (collective,
+-- @[MPI_Reduce](https://www.open-mpi.org/doc/current/man3/MPI_Reduce.3.php)@).
+-- The result is only available on the root process. The MPI datatypes
+-- are determined automatically from the buffer pointer types.
 reduce :: forall a p q.
-          ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-          p a -> q a -> Count -> Op -> Rank -> Comm -> IO ()
+          ( Pointer p, Pointer q, Storable a, HasDatatype a)
+       => p a                   -- ^ Source buffer
+       -> q a                   -- ^ Destination buffer
+       -> Count                 -- ^ Number of elements
+       -> Op                    -- ^ Reduction operation
+       -> Rank                  -- ^ Root rank
+       -> Comm                  -- ^ Communicator
+       -> IO ()
 reduce sendbuf recvbuf count op rank comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1262,9 +1575,20 @@ reduce sendbuf recvbuf count op rank comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Reduce data from all processes via an (inclusive) scan
+--  (collective,
+--  @[MPI_Scan](https://www.open-mpi.org/doc/current/man3/MPI_Scan.3.php)@).
+--  Each process with rank @r@ receives the result of reducing data
+--  from rank @0@ to rank @r@ (inclusive). The MPI datatype is
+--  determined automatically from the buffer pointer type.
 scan :: forall a p q.
-        ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-        p a -> q a -> Count -> Op -> Comm -> IO ()
+        ( Pointer p, Pointer q, Storable a, HasDatatype a)
+     => p a                     -- ^ Source buffer
+     -> q a                     -- ^ Destination buffer
+     -> Count                   -- ^ Number of elements
+     -> Op                      -- ^ Reduction operation
+     -> Comm                    -- ^ Communicator
+     -> IO ()
 scan sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1281,10 +1605,20 @@ scan sendbuf recvbuf count op comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Scatter data from the root process to all processes (collective,
+-- @[MPI_Scatter](https://www.open-mpi.org/doc/current/man3/MPI_Scatter.3.php)@).
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 scatter :: forall a b p q.
            ( Pointer p, Pointer q
-           , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-           p a -> Count -> q b -> Count -> Rank -> Comm -> IO ()
+           , Storable a, HasDatatype a, Storable b, HasDatatype b)
+        => p a      -- ^ Source buffer (only used on the root process)
+        -> Count -- ^ Number of source elements (only used on the root process)
+        -> q b                  -- ^ Destination buffer
+        -> Count                -- ^ Number of destination elements
+        -> Rank                 -- ^ Root rank
+        -> Comm                 -- ^ Communicator
+        -> IO ()
 scatter sendbuf sendcount recvbuf recvcount root comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -1301,8 +1635,17 @@ scatter sendbuf sendcount recvbuf recvcount root comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-send :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
-        p a -> Count -> Rank -> Tag -> Comm -> IO ()
+-- | Send a message
+-- (@[MPI_Send](https://www.open-mpi.org/doc/current/man3/MPI_Send.3.php)@).
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type.
+send :: forall a p. (Pointer p, Storable a, HasDatatype a)
+     => p a                     -- ^ Send buffer
+     -> Count                   -- ^ Number of elements to send
+     -> Rank                    -- ^ Destination rank
+     -> Tag                     -- ^ Message tag
+     -> Comm                    -- ^ Communicator
+     -> IO ()
 send sendbuf sendcount sendrank sendtag comm =
   withPtr sendbuf $ \sendbuf' ->
   sendTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag comm
@@ -1322,12 +1665,23 @@ send sendbuf sendcount sendrank sendtag comm =
     , +
     } -> `Status' return*#}
 
+-- | Send and receive a message with a single call
+-- (@[MPI_Sendrecv](https://www.open-mpi.org/doc/current/man3/MPI_Sendrecv.3.php)@).
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 sendrecv :: forall a b p q.
             ( Pointer p, Pointer q
-            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-            p a -> Count -> Rank -> Tag ->
-            q b -> Count -> Rank -> Tag ->
-            Comm -> IO Status
+            , Storable a, HasDatatype a, Storable b, HasDatatype b)
+         => p a                 -- ^ Send buffer
+         -> Count               -- ^ Number of elements to send
+         -> Rank                -- ^ Destination rank
+         -> Tag                 -- ^ Sent message tag
+         -> q a                 -- ^ Receive buffer
+         -> Count               -- ^ Number of elements to receive
+         -> Rank                -- ^ Source rank (may be 'anySource')
+         -> Tag                 -- ^ Received message tag (may be 'anyTag')
+         -> Comm                -- ^ Communicator
+         -> IO Status           -- ^ Status for received message
 sendrecv sendbuf sendcount sendrank sendtag
          recvbuf recvcount recvrank recvtag
          comm =
@@ -1352,12 +1706,24 @@ sendrecv sendbuf sendcount sendrank sendtag
     , withStatusIgnore- `Status'
     } -> `()' return*-#}
 
+-- | Send and receive a message with a single call
+-- (@[MPI_Sendrecv](https://www.open-mpi.org/doc/current/man3/MPI_Sendrecv.3.php)@).
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types. This function does not return a status, which might
+-- be more efficient if the status is not needed.
 sendrecv_ :: forall a b p q.
              ( Pointer p, Pointer q
-             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-             p a -> Count -> Rank -> Tag ->
-             q b -> Count -> Rank -> Tag ->
-             Comm -> IO ()
+             , Storable a, HasDatatype a, Storable b, HasDatatype b)
+          => p a                -- ^ Send buffer
+          -> Count              -- ^ Number of elements to send
+          -> Rank               -- ^ Destination rank
+          -> Tag                -- ^ Sent message tag
+          -> q a                -- ^ Receive buffer
+          -> Count              -- ^ Number of elements to receive
+          -> Rank               -- ^ Source rank (may be 'anySource')
+          -> Tag                -- ^ Received message tag (may be 'anyTag')
+          -> Comm               -- ^ Communicator
+          -> IO ()
 sendrecv_ sendbuf sendcount sendrank sendtag
           recvbuf recvcount recvrank recvtag
           comm =
@@ -1377,7 +1743,12 @@ testBool req =
           b <- peekBool flag
           return (b, st)
 
-test :: Request -> IO (Maybe Status)
+-- | Check whether a communication has completed, and free the
+-- communication request if so
+-- (@[MPI_Test](https://www.open-mpi.org/doc/current/man3/MPI_Test.3.php)@).
+test :: Request           -- ^ Communication request
+     -> IO (Maybe Status) -- ^ 'Just' 'Status' if the request has completed,
+                          -- else 'Nothing'
 test req = bool2maybe <$> testBool req
 
 -- {#fun Test as test_
@@ -1386,7 +1757,13 @@ test req = bool2maybe <$> testBool req
 --     , withStatusIgnore- `Status'
 --     } -> `()' return*-#}
 
-test_ :: Request -> IO Bool
+-- | Check whether a communication has completed, and free the
+-- communication request if so
+-- (@[MPI_Test](https://www.open-mpi.org/doc/current/man3/MPI_Test.3.php)@).
+-- This function does not return a status, which might be more
+-- efficient if the status is not needed.
+test_ :: Request                -- ^ Communication request
+      -> IO Bool                -- ^ Whether the request had completed
 test_ req =
   withRequest req $ \req' ->
   alloca $ \flag ->
@@ -1394,16 +1771,27 @@ test_ req =
   do _ <- {#call Test as test__#} req' flag st
      peekBool flag
 
+-- | Wait for a communication request to complete, then free the
+--  request
+--  (@[MPI_Wait](https://www.open-mpi.org/doc/current/man3/MPI_Wait.3.php)@).
 {#fun Wait as ^
-    { withRequest* `Request'
+    { withRequest* `Request'    -- ^ Communication request
     , +
-    } -> `Status' return*#}
+    } -> `Status' return*       -- ^ Message status
+#}
 
+-- | Wait for a communication request to complete, then free the
+--  request
+--  (@[MPI_Wait](https://www.open-mpi.org/doc/current/man3/MPI_Wait.3.php)@).
+-- This function does not return a status, which might be more
+-- efficient if the status is not needed.
 {#fun Wait as wait_
-    { withRequest* `Request'
+    { withRequest* `Request'    -- ^ Communication request
     , withStatusIgnore- `Status'
     } -> `()' return*-#}
 
+-- | Wall time tick (accuracy of 'wtime') (in seconds)
 {#fun unsafe Wtick as ^ {} -> `Double'#}
 
+-- | Current wall time (in seconds)
 {#fun unsafe Wtime as ^ {} -> `Double'#}
