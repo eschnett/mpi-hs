@@ -13,6 +13,41 @@
 #include <mpi.h>
 #include <mpihs.h>
 
+
+
+-- | Module: Control.Distributed.MPI
+-- Description: MPI bindings for Haskell
+-- Copyright: (C) 2018 Erik Schnetter
+-- License: Apache-2.0
+-- Maintainer: Erik Schnetter <schnetter@gmail.com>
+-- Stability: experimental
+-- Portability: Requires an externally installed MPI library
+--
+-- MPI (the [Message Passing Interface](https://www.mpi-forum.org)) is
+-- widely used standard for distributed-memory programming on HPC
+-- (High Performance Computing) systems. MPI allows exchanging data
+-- (_messages_) between programs running in parallel. There are
+-- several high-quality open source MPI implementations (e.g. MPICH,
+-- MVAPICH, OpenMPI) as well as a variety of closed-source
+-- implementations. These libraries can typically make use of
+-- high-bandwidth low-latency communication hardware such as
+-- InfiniBand.
+--
+-- This library @mpi-hs@ provides Haskell bindings for MPI. It is
+-- based on ideas taken from
+-- [haskell-mpi](https://github.com/bjpop/haskell-mpi),
+-- [Boost.MPI](https://www.boost.org/doc/libs/1_64_0/doc/html/mpi.html),
+-- and [MPI for Python](https://mpi4py.readthedocs.io/en/stable/).
+--
+-- @mpi-hs@ provides two API levels: A low-level API gives rather
+-- direct access to the MPI API, apart from certain "reasonable"
+-- mappings from C to Haskell (e.g. output arguments that are in C
+-- stored to a pointer are in Haskell regular return values). A
+-- high-level API simplifies exchanging arbitrary values that can be
+-- serialized.
+--
+-- This module 'MPI' is the low-level interface.
+
 module Control.Distributed.MPI
   ( Comm(..)
   , ComparisonResult(..)
@@ -58,7 +93,7 @@ module Control.Distributed.MPI
   , datatypeUnsignedLong
   , datatypeUnsignedShort
   , HasDatatype(..)
-  , datatypeOf
+  -- , datatypeOf
   -- TODO: use a module for this namespace
   , opNull
   , opBand
@@ -76,7 +111,7 @@ module Control.Distributed.MPI
   -- , HasOp(..)
   , anySource
   , requestNull
-  , statusIgnore
+  -- , statusIgnore
   , anyTag
 
   , abort
@@ -199,6 +234,8 @@ peekInt = liftM fromIntegral . peek
 
 --------------------------------------------------------------------------------
 
+-- | A generic pointer-like type that supports converting to a 'Ptr'.
+-- This class describes the buffers used to send and receive messages.
 class Pointer p where
   withPtr :: Storable a => p a -> (Ptr a -> IO b) -> IO b
 
@@ -213,18 +250,25 @@ instance Pointer StablePtr where
 
 
 
+-- | An MPI communicator, wrapping @MPI_Comm@. A communicator defines
+-- an independent communication channel between a group of processes.
+-- Communicators need to be explicitly created and freed by the MPI
+-- library. 'commWorld' is a communicator that is always available,
+-- and which includes all processes.
 {#pointer *MPI_Comm as Comm foreign newtype#}
 
 deriving instance Eq Comm
 deriving instance Ord Comm
 deriving instance Show Comm
 
+-- | The result of comparing two MPI communicator (see 'commCompare').
+{#enum ComparisonResult {} deriving (Eq, Ord, Read, Show)#}
 
 
-{#enum ComparisonResult {underscoreToCase} deriving (Eq, Ord, Read, Show)#}
 
-
-
+-- | A newtype wrapper describing the size of a message. Use 'toCount'
+-- and 'fromCount' to convert between 'Count' and other integral
+-- types.
 newtype Count = Count CInt
   deriving (Eq, Ord, Enum, Integral, Num, Real, Storable)
 
@@ -234,14 +278,20 @@ instance Read Count where
 instance Show Count where
   showsPrec p (Count c) = showsPrec p c
 
-toCount :: Enum e => e -> Count
-toCount e = Count (fromIntegral (fromEnum e))
+-- | Convert an integer to a count.
+toCount :: Integral i => i -> Count
+toCount i = Count (fromIntegral i)
 
-fromCount :: Enum e => Count -> e
-fromCount (Count c) = toEnum (fromIntegral c)
+-- | Convert a count to an integer.
+fromCount :: Integral i => Count -> i
+fromCount (Count c) = fromIntegral c
 
 
 
+-- | An MPI datatype, wrapping @MPI_Datatype@. Datatypes need to be
+-- explicitly created and freed by the MPI library. Predefined
+-- datatypes exist for most simple C types such as 'CInt' or
+-- 'CDouble'.
 {#pointer *MPI_Datatype as Datatype foreign newtype#}
 
 deriving instance Eq Datatype
@@ -250,6 +300,13 @@ deriving instance Show Datatype
 
 
 
+-- | An MPI reduction operation, wrapping @MPI_Op@. Reduction
+-- operations need to be explicitly created and freed by the MPI
+-- library. Predefined operation exist for simple semigroups such as
+-- sum, maximum, or minimum.
+--
+-- An MPI reduction operation corresponds to a Semigroup, not a
+-- Monoid, i.e. MPI has no notion of a respective neutral element.
 {#pointer *MPI_Op as Op foreign newtype#}
 
 deriving instance Eq Op
@@ -258,6 +315,16 @@ deriving instance Show Op
 
 
 
+-- | A newtype wrapper describing the source or destination of a
+-- message, i.e. a process. Each communicator numbers its processes
+-- sequentially starting from zero. Use 'toRank' and 'fromRank' to
+-- convert between 'Rank' and other integral types. 'rootRank' is the
+-- root (first) process of a communicator.
+--
+-- The association between a rank and a communicator is not explicitly
+-- tracked. From MPI's point of view, ranks are simply integers. The
+-- same rank might correspond to different processes in different
+-- communicators.
 newtype Rank = Rank CInt
   deriving (Eq, Ord, Enum, Integral, Num, Real, Storable)
 
@@ -275,17 +342,23 @@ instance Ix Rank where
     | otherwise   = indexError b i "MPI.Rank"
   inRange (Rank rmin, Rank rmax) (Rank r) = rmin <= r && r <= rmax
 
+-- | Convert an enum to a rank.
 toRank :: Enum e => e -> Rank
 toRank e = Rank (fromIntegral (fromEnum e))
 
+-- | Convert a rank to an enum.
 fromRank :: Enum e => Rank -> e
 fromRank (Rank r) = toEnum (fromIntegral r)
 
+-- | The root (first) rank of a communicator.
 rootRank :: Rank
 rootRank = toRank 0
 
 
 
+-- | An MPI request, wrapping @MPI_Request@. A request describes a
+-- communication that is currently in progress. Each request must be
+-- explicitly freed via 'cancel', 'test', or 'wait'.
 {#pointer *MPI_Request as Request foreign newtype#}
 
 deriving instance Eq Request
@@ -294,6 +367,18 @@ deriving instance Show Request
 
 
 
+-- | An MPI status, wrapping @MPI_Status@. The status describes
+-- certain properties of a message. It contains information such as
+-- the source of a communication ('getSource'), the message tag
+-- ('getTag'), or the size of the message ('getCount', 'getElements').
+--
+-- In many cases, the status is not interesting. In this case, you can
+-- use alternative functions ending with an underscore (e.g. 'recv_')
+-- that do not calculate a status.
+--
+-- The status is particularly interesting when using 'probe' or
+-- 'iprobe', as it describes a message that is ready to be received,
+-- but which has not been received yet.
 {#pointer *MPI_Status as Status foreign newtype#}
 
 deriving instance Eq Status
@@ -304,67 +389,134 @@ deriving instance Show Status
 -- statusError (Status mst) =
 --   Error $ {#get MPI_Status.MPI_ERROR#} mst
 
+-- | Get the source rank of a message.
 getSource :: Status -> IO Rank
 getSource (Status fst) =
   withForeignPtr fst (\pst -> Rank <$> {#get MPI_Status->MPI_SOURCE#} pst)
 
+-- | Get the message tag.
 getTag :: Status -> IO Tag
 getTag (Status fst) =
   withForeignPtr fst (\pst -> Tag <$> {#get MPI_Status->MPI_TAG#} pst)
 
 
 
+-- | A newtype wrapper describing a message tag. A tag defines a
+-- sub-channel within a communicator. While communicators are
+-- heavy-weight object that are expensive to set up and tear down, a
+-- tag is a lightweight mechanism using an integer. Use 'toTag' and
+-- 'fromTag' to convert between 'Count' and other enum types.
+-- 'unitTag' defines a standard tag that can be used as default.
 newtype Tag = Tag CInt
-  deriving (Eq, Ord, Read, Show, Num, Storable)
+  deriving (Eq, Ord, Read, Show, Enum, Num, Storable)
 
+-- | Convert an enum to a tag.
 toTag :: Enum e => e -> Tag
 toTag e = Tag (fromIntegral (fromEnum e))
 
+-- | Convert a tag to an enum.
 fromTag :: Enum e => Tag -> e
 fromTag (Tag t) = toEnum (fromIntegral t)
 
+-- | Useful default tag.
 unitTag :: Tag
 unitTag = toTag ()
 
 
 
+-- | Thread support levels for MPI.
+--
+-- * 'ThreadSingle': The application must be single-threaded
+--
+-- * 'ThreadFunneled': The application might be multi-threaded, but
+--   only a single thread will call MPI
+--
+-- * 'ThreadSerialized': The application might be multi-threaded, but
+--   the application guarantees that only one thread at a time will
+--   call MPI
+--
+-- * 'ThreadMultiple': The application is multi-threaded, and
+--   different threads might call MPI at the same time
 {#enum ThreadSupport {} deriving (Eq, Ord, Read, Show)#}
+
+-- | When MPI is initialized with this library, then it will remember
+-- the provided level of thread support. (This might be less than the
+-- requested level.)
+threadSupport :: IO (Maybe ThreadSupport)
+threadSupport = readIORef providedThreadSupport
 
 providedThreadSupport :: IORef (Maybe ThreadSupport)
 providedThreadSupport = unsafePerformIO (newIORef Nothing)
-threadSupport :: IO (Maybe ThreadSupport)
-threadSupport = readIORef providedThreadSupport
 
 
 
 --------------------------------------------------------------------------------
 
+-- | A null (invalid) communicator.
 {#fun pure mpihs_get_comm_null as commNull {+} -> `Comm'#}
+
+-- | The self communicator. Each process has its own self communicator
+-- that includes only this process.
 {#fun pure mpihs_get_comm_self as commSelf {+} -> `Comm'#}
+
+-- | The world communicator, which includes all processes.
 {#fun pure mpihs_get_comm_world as commWorld {+} -> `Comm'#}
 
 
 
+-- | Error value returned by 'getCount' if the message is too large,
+-- or if the message size is not an integer multiple of the provided
+-- datatype.
 {#fun pure mpihs_get_undefined as countUndefined {} -> `Count' toCount#}
 
 
 
+-- | A null (invalid) datatype.
 {#fun pure mpihs_get_datatype_null as datatypeNull {+} -> `Datatype'#}
 
+-- | MPI datatype for a byte (essentially 'CUChar') (@MPI_BYTE@).
 {#fun pure mpihs_get_byte as datatypeByte {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CChar' (@MPI_CHAR@).
 {#fun pure mpihs_get_char as datatypeChar {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CDouble' (@MPI_DOUBLE@).
 {#fun pure mpihs_get_double as datatypeDouble {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CFloat' (@MPI_FLOAT@).
 {#fun pure mpihs_get_float as datatypeFloat {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CInt' (@MPI_INT@).
 {#fun pure mpihs_get_int as datatypeInt {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CLong' (@MPI_LONG@).
 {#fun pure mpihs_get_long as datatypeLong {+} -> `Datatype'#}
+
+-- | MPI datatype for the C type 'long double' (@MPI_LONG_DOUBLE@).
 {#fun pure mpihs_get_long_double as datatypeLongDouble {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CLLong' (@MPI_LONG_LONG_INT@). (There is no MPI
+-- datatype for 'CULLong@).
 {#fun pure mpihs_get_long_long_int as datatypeLongLongInt {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CShort' (@MPI_SHORT@).
 {#fun pure mpihs_get_short as datatypeShort {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CUInt' (@MPI_UNSIGNED@).
 {#fun pure mpihs_get_unsigned as datatypeUnsigned {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CUChar' (@MPI_UNSIGNED_CHAR@).
 {#fun pure mpihs_get_unsigned_char as datatypeUnsignedChar {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CULong' (@MPI_UNSIGNED_LONG@).
 {#fun pure mpihs_get_unsigned_long as datatypeUnsignedLong {+} -> `Datatype'#}
+
+-- | MPI datatype for 'CUShort' (@MPI_UNSIGNED_SHORT@).
 {#fun pure mpihs_get_unsigned_short as datatypeUnsignedShort {+} -> `Datatype'#}
 
+-- | A type class mapping Haskell types to MPI datatypes. This is used
+-- to automatically determine the MPI datatype for communication
+-- buffers.
 class HasDatatype a where datatype :: Datatype
 instance HasDatatype CChar where datatype = datatypeChar
 instance HasDatatype CDouble where datatype = datatypeDouble
@@ -456,24 +608,50 @@ instance HasDatatype CUShort where datatype = datatypeUnsignedShort
 --   datatype = if | coercible @Double @CFloat -> datatype @CFloat
 --                 | coercible @Double @CDouble -> datatype @CDouble
 
-datatypeOf :: forall a p. HasDatatype a => p a -> Datatype
-datatypeOf _ = datatype @a
+-- datatypeOf :: forall a p. HasDatatype a => p a -> Datatype
+-- datatypeOf _ = datatype @a
 
 
 
+-- | A null (invalid) reduction operation.
 {#fun pure mpihs_get_op_null as opNull {+} -> `Op'#}
 
+-- | The bitwise and @(.&.)@ reduction operation (@MPI_BAND@).
 {#fun pure mpihs_get_band as opBand {+} -> `Op'#}
+
+-- | The bitwise or @(.|.)@ reduction operation (@MPI_BOR@).
 {#fun pure mpihs_get_bor as opBor {+} -> `Op'#}
+
+-- | The bitwise (@xor@) reduction operation (@MPI_BXOR@).
 {#fun pure mpihs_get_bxor as opBxor {+} -> `Op'#}
+
+-- | The logical and @(&&)@ reduction operation (@MPI_LAND@).
 {#fun pure mpihs_get_land as opLand {+} -> `Op'#}
+
+-- | The logical or @(||)@ reduction operation (@MPI_LOR@).
 {#fun pure mpihs_get_lor as opLor {+} -> `Op'#}
+
+-- | The logical xor reduction operation (@MPI_LXOR@).
 {#fun pure mpihs_get_lxor as opLxor {+} -> `Op'#}
+
+-- | The 'maximum' reduction operation (@MPI_MAX@).
 {#fun pure mpihs_get_max as opMax {+} -> `Op'#}
+
+-- | The argmax reduction operation to find the maximum and its rank
+-- (@MPI_MAXLOC@).
 {#fun pure mpihs_get_maxloc as opMaxloc {+} -> `Op'#}
+
+-- | The 'minimum' reduction operation (@MPI_MIN@).
 {#fun pure mpihs_get_min as opMin {+} -> `Op'#}
+
+-- | The argmin reduction operation to find the minimum and its rank
+-- (@MPI_MINLOC@).
 {#fun pure mpihs_get_minloc as opMinloc {+} -> `Op'#}
+
+-- | The (@product@) reduction operation (@MPI_PROD@).
 {#fun pure mpihs_get_prod as opProd {+} -> `Op'#}
+
+-- | The (@sum@) reduction operation (@MPI_SUM@).
 {#fun pure mpihs_get_sum as opSum {+} -> `Op'#}
 
 instance HasDatatype a => HasDatatype (Monoid.Product a) where
@@ -497,10 +675,15 @@ instance HasDatatype a => HasDatatype (Semigroup.Min a) where
 
 
 
+-- | Rank placeholder to specify that a message can be received from
+-- any source. When calling 'probe' or 'recv' (or 'iprobe' or 'irecv')
+-- with 'anySource' as source, the actual source can be determined
+-- from the returned message status via 'getSource'.
 {#fun pure mpihs_get_any_source as anySource {} -> `Rank' toRank#}
 
 
 
+-- | A null (invalid) request.
 {#fun pure mpihs_get_request_null as requestNull {+} -> `Request'#}
 
 
@@ -512,15 +695,21 @@ withStatusIgnore = withStatus statusIgnore
 
 
 
+-- | Tag placeholder to specify that a message can have any tag. When
+-- calling 'probe' or 'recv' (or 'iprobe' or 'irecv') with 'anyTag' as
+-- tag, the actual tag can be determined from the returned message
+-- status via 'getTag'.
 {#fun pure mpihs_get_any_tag as anyTag {} -> `Tag' toTag#}
 
 
 
 --------------------------------------------------------------------------------
 
+-- | Terminate MPI execution environment (@MPI_Abort@).
 {#fun Abort as ^
-    { withComm* %`Comm'
-    , fromIntegral `Int'
+    { withComm* %`Comm' -- ^ Communicator describing which processes
+                        -- to terminate
+    , fromIntegral `Int' -- ^ Error code
     } -> `()' return*-#}
 
 {#fun Allgather as allgatherTyped
@@ -533,10 +722,18 @@ withStatusIgnore = withStatus statusIgnore
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Gather data from all processes and broadcast the result
+-- (@MPI_Allgather@). The MPI datatypes are determined automatically
+-- from the buffer pointer types.
 allgather :: forall a b p q.
              ( Pointer p, Pointer q
-             , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-             p a -> Count -> q b -> Count -> Comm -> IO ()
+             , Storable a, HasDatatype a, Storable b, HasDatatype b)
+          => p a                -- ^ Source buffer
+          -> Count              -- ^ Number of source elements
+          -> q b                -- ^ Destination buffer
+          -> Count              -- ^ Number of destination elements
+          -> Comm               -- ^ Communicator
+          -> IO ()
 allgather sendbuf sendcount recvbuf recvcount comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -553,9 +750,17 @@ allgather sendbuf sendcount recvbuf recvcount comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Reduce data from all processes and broadcast the result
+-- (@MPI_Allreduce@). The MPI datatype is determined automatically
+-- from the buffer pointer types.
 allreduce :: forall a p q.
-             ( Pointer p, Pointer q, Storable a, HasDatatype a) =>
-             p a -> q a -> Count -> Op -> Comm -> IO ()
+             ( Pointer p, Pointer q, Storable a, HasDatatype a)
+          => p a                -- ^ Source buffer
+          -> q a                -- ^ Destination buffer
+          -> Count              -- ^ Number of elements
+          -> Op                 -- ^ Reduction operation
+          -> Comm               -- ^ Communicator
+          -> IO ()
 allreduce sendbuf recvbuf count op comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -572,10 +777,18 @@ allreduce sendbuf recvbuf count op comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
+-- | Send data from all processes to all processes (@MPI_Alltoall@).
+-- The MPI datatypes are determined automatically from the buffer
+-- pointer types.
 alltoall :: forall a b p q.
             ( Pointer p, Pointer q
-            , Storable a, HasDatatype a, Storable b, HasDatatype b) =>
-            p a -> Count -> q b -> Count -> Comm -> IO ()
+            , Storable a, HasDatatype a, Storable b, HasDatatype b)
+         => p a                 -- ^ Source buffer
+         -> Count               -- ^ Number of source elements
+         -> q b                 -- ^ Destination buffer
+         -> Count               -- ^ Number of destination elements
+         -> Comm                -- ^ Communicator
+         -> IO ()
 alltoall sendbuf sendcount recvbuf recvcount comm =
   withPtr sendbuf $ \sendbuf' ->
   withPtr recvbuf $ \recvbuf' ->
@@ -583,7 +796,10 @@ alltoall sendbuf sendcount recvbuf recvcount comm =
                 (castPtr recvbuf') recvcount (datatype @b)
                 comm
 
-{#fun Barrier as ^ {withComm* %`Comm'} -> `()' return*-#}
+-- | Barrier.
+{#fun Barrier as ^
+    { withComm* %`Comm'         -- ^ Communicator
+    } -> `()' return*-#}
 
 {#fun Bcast as bcastTyped
     { id `Ptr ()'
@@ -593,8 +809,16 @@ alltoall sendbuf sendcount recvbuf recvcount comm =
     , withComm* %`Comm'
     } -> `()' return*-#}
 
-bcast :: forall a p. (Pointer p, Storable a, HasDatatype a) =>
-         p a -> Count -> Rank -> Comm -> IO ()
+-- | Broadcast data from one process to all processes (@MPI_Bcast@).
+-- The MPI datatype is determined automatically from the buffer
+-- pointer type.
+bcast :: forall a p. (Pointer p, Storable a, HasDatatype a)
+      => p a -- ^ Buffer pointer (read on the root process, written on
+             -- all other processes)
+      -> Count                  -- ^ Number of elements
+      -> Rank                   -- ^ Root rank (sending process)
+      -> Comm                   -- ^ Communicator
+      -> IO ()
 bcast buf count root comm =
   withPtr buf $ \buf' ->
   bcastTyped (castPtr buf') count (datatype @a) root comm
@@ -658,12 +882,16 @@ gather sendbuf sendcount recvbuf recvcount root comm =
               (castPtr recvbuf') recvcount (datatype @b)
               root comm
 
+-- | Get the size of a message, in terms of objects of type 'Datatype'.
 {#fun unsafe Get_count as ^
     { withStatus* `Status'
     , withDatatype* %`Datatype'
     , alloca- `Int' peekInt*
     } -> `()' return*-#}
 
+-- | Get the number of elements in message, in terms of sub-object of
+-- the type 'datatype'. This is useful when a message contains partial
+-- objects of type 'datatype'.
 {#fun unsafe Get_elements as ^
     { withStatus* `Status'
     , withDatatype* %`Datatype'
