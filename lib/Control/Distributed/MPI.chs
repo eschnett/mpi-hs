@@ -81,34 +81,24 @@
 --   functions could be exposed as well when needed.)
 
 module Control.Distributed.MPI
-  ( Comm(..)
-  , ComparisonResult(..)
-  , Count(..)
-  , fromCount
-  , toCount
-  , Datatype(..)
-  , Op(..)
-  , Rank(..)
-  , fromRank
-  , rootRank
-  , toRank
-  , Request(..)
-  , Status(..)
-  --, statusError
-  , getSource
-  , getTag
-  , Tag(..)
-  , fromTag
-  , toTag
-  , unitTag
-  , ThreadSupport(..)
-  , threadSupport
+  ( -- * Types and constants
 
-  , Pointer(..)
+    -- ** Communicators
+    Comm(..)
+  , ComparisonResult(..)
   , commNull
   , commSelf
   , commWorld
+
+    -- ** Message sizes
+  , Count(..)
+  , fromCount
+  , toCount
   , countUndefined
+
+    -- ** Datatypes
+  , Datatype(..)
+  , Pointer(..)
   -- TODO: use a module for this namespace
   , datatypeNull
   , datatypeByte
@@ -126,6 +116,9 @@ module Control.Distributed.MPI
   , datatypeUnsignedShort
   , HasDatatype(..)
   -- , datatypeOf
+
+    -- ** Reduction operations
+  , Op(..)
   -- TODO: use a module for this namespace
   , opNull
   , opBand
@@ -141,29 +134,88 @@ module Control.Distributed.MPI
   , opProd
   , opSum
   -- , HasOp(..)
+
+    -- ** Process ranks
+  , Rank(..)
+  , fromRank
+  , rootRank
+  , toRank
   , anySource
+
+    -- ** Communication requests
+  , Request(..)
   , requestNull
+
+    -- ** Message status
+  , Status(..)
+  --, statusError
+  , getSource
+  , getTag
   -- , statusIgnore
+
+    -- ** Message tags
+  , Tag(..)
+  , fromTag
+  , toTag
+  , unitTag
   , anyTag
 
+    -- ** Thread support
+  , ThreadSupport(..)
+  , threadSupport
+
+    -- * Functions
+
+    -- ** Initialization and shutdown
   , abort
-  , allgather
-  , allreduce
-  , alltoall
-  , barrier
-  , bcast
+  , finalize
+  , finalized
+  , init
+  , initThread
+  , initialized
+
+    -- ** Inquiry
   , commCompare
   , commRank
   , commSize
-  , exscan
-  , finalize
-  , finalized
-  , gather
   , getCount
   , getElements
   , getLibraryVersion
   , getProcessorName
   , getVersion
+
+    -- ** Point-to-point (blocking)
+  , probe
+  , probe_
+  , recv
+  , recv_
+  , send
+  , sendrecv
+  , sendrecv_
+  , wait
+  , wait_
+
+    -- ** Point-to-point (non-blocking)
+  , iprobe
+  , iprobe_
+  , irecv
+  , isend
+  , test
+  , test_
+
+    -- ** Collective (blocking)
+  , allgather
+  , allreduce
+  , alltoall
+  , barrier
+  , bcast
+  , exscan
+  , gather
+  , reduce
+  , scan
+  , scatter
+
+    -- ** Collective (non-blocking)
   , iallgather
   , iallreduce
   , ialltoall
@@ -171,30 +223,11 @@ module Control.Distributed.MPI
   , ibcast
   , iexscan
   , igather
-  , init
-  , initThread
-  , initialized
-  , iprobe
-  , iprobe_
-  , irecv
   , ireduce
   , iscan
   , iscatter
-  , isend
-  , probe
-  , probe_
-  , recv
-  , recv_
-  , reduce
-  , scan
-  , scatter
-  , send
-  , sendrecv
-  , sendrecv_
-  , test
-  , test_
-  , wait
-  , wait_
+
+    -- ** Timing
   , wtick
   , wtime
   ) where
@@ -266,6 +299,10 @@ peekInt = liftM fromIntegral . peek
 
 
 --------------------------------------------------------------------------------
+
+-- Types
+
+
 
 -- | A generic pointer-like type that supports converting to a 'Ptr'.
 -- This class describes the buffers used to send and receive messages.
@@ -486,6 +523,10 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
 
 
 --------------------------------------------------------------------------------
+
+-- Constants
+
+
 
 -- | A null (invalid) communicator (@MPI_COMM_NULL@).
 {#fun pure mpihs_get_comm_null as commNull {+} -> `Comm'#}
@@ -740,6 +781,10 @@ withStatusIgnore = withStatus statusIgnore
 
 
 --------------------------------------------------------------------------------
+
+-- Functions
+
+
 
 -- | Terminate MPI execution environment
 -- (@[MPI_Abort](https://www.open-mpi.org/doc/current/man3/MPI_Abort.3.php)@).
