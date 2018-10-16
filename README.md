@@ -2,4 +2,4 @@
 
 MPI bindings for Haskell
 
-[![CircleCI](https://circleci.com/gh/eschnett/haskell-mpi.svg?style=svg)](https://circleci.com/gh/eschnett/haskell-mpi)
+[![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
