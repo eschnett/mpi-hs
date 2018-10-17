@@ -93,6 +93,7 @@ with `stack build`.
 On Ubuntu, one MPI package is `openmpi-dev`. It installs into
 `/usr/lib/openmpi/include`, `/usr/lib/openmpi/lib`, and `/usr/bin/`.
 You need to ensure that these settings are present in `stack.yaml`:
+
 ```yaml
 extra-include-dirs:
   - /usr/lib/openmpi/include
@@ -104,6 +105,7 @@ On MacOS, one MPI package is the [MacPorts](https://www.macports.org)
 package `openmpi`. It installs into `/opt/local/include/openmpi-mp`,
 `/opt/local/lib/openmpi-mp`, and `/opt/local/bin`. You need to ensure
 that these settings are present in `stack.yaml`:
+
 ```yaml
 extra-include-dirs:
   - /opt/local/include/openmpi-mp
@@ -112,3 +114,34 @@ extra-lib-dirs:
 ```
 
 Both these settings are there by default.
+
+### Testing the MPI installation
+
+To test your MPI installation independently of using Haskell, copy the
+example MPI C code into a file `mpi-example.c`, and run these commands:
+
+```sh
+cc -I/usr/lib/openmpi/include -c mpi-example.c
+cc mpi-example.o -o mpi-example -L/usr/lib/openmpi/lib -lmpi
+mpirun -np 3 ./mpi-example
+```
+
+All three commands must complete without error, and the last command
+must output something like
+
+```
+This is process 0 of 3
+This is process 1 of 3
+This is process 2 of 3
+```
+
+where the order in which the lines are printed can be random. (The
+output might even be jumbled, i.e. the characters of the three lines
+might be mixed up.)
+
+If these commands do not work, then this needs to be corrected before
+`mpi-hs` can work. If additional compiler options or libraries are
+needed, then these need to be added to the `stack.yaml` configuration
+file (for include and library paths; see `extra-include-dirs` and
+`extra-lib-dirs` there) or the `package.yaml` configuration file (for
+additional libraries; see `extra-libraries` there).
