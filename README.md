@@ -2,15 +2,17 @@
 
 [MPI](https://www.mpi-forum.org) bindings for Haskell
 
-[![Github](share/GitHub_Logo.png)](https://github.com/eschnett/mpi-hs)
-[[Hackage]](http://hackage.haskell.org/package/mpi-hs)
-[![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
+* [<img alt="Github" src="share/GitHub_Logo.png" height="25"
+  align="middle">](https://github.com/eschnett/mpi-hs)
+* [[Hackage]](http://hackage.haskell.org/package/mpi-hs) Haskell
+  package and documentation
+* [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
 
 
 
 ## Overview
 
-MPI (the _Message Passing Interface_) is widely used standard for
+MPI (the Message Passing Interface) is widely used standard for
 distributed-memory programming on HPC (High Performance Computing)
 systems. MPI allows exchanging data (_messages_) between programs
 running in parallel. There are several high-quality open source MPI
@@ -63,3 +65,50 @@ main =
      putStrLn $ "This is process " ++ show rank ++ " of " ++ show size
      MPI.finalize
 ```
+
+
+
+## Installing
+
+`mpi-hs` requires an external MPI library to be available on the
+system. How to install such a library is beyond the scope of these
+instructions.
+
+<!---
+(It is important that the MPI library's include files, libraries, and
+executables are installed consistently. A common source of problems is
+that there are several MPI implementations available on a system, and
+that the default include file `mpi.h`, the library `libmpi.a`, and/or
+the executable `mpirun` are provided by different implementations.
+This will lead to various problems, often segfaults, since neither the
+operating system nor these libraries provide any protection against
+such a mismatch.)
+-->
+
+In many cases, the MPI library will be installed in `/usr/include`,
+`/usr/lib`, and `/usr/bin`, respectively. In this case, no further
+configuration is necessary, and `mpi-hs` will build out of the box
+with `stack build`.
+
+On Ubuntu, one MPI package is `openmpi-dev`. It installs into
+`/usr/lib/openmpi/include`, `/usr/lib/openmpi/lib`, and `/usr/bin/`.
+You need to ensure that these settings are present in `stack.yaml`:
+```yaml
+extra-include-dirs:
+  - /usr/lib/openmpi/include
+extra-lib-dirs:
+  - /usr/lib/openmpi/lib
+```
+
+On MacOS, one MPI package is the [MacPorts](https://www.macports.org)
+package `openmpi`. It installs into `/opt/local/include/openmpi-mp`,
+`/opt/local/lib/openmpi-mp`, and `/opt/local/bin`. You need to ensure
+that these settings are present in `stack.yaml`:
+```yaml
+extra-include-dirs:
+  - /opt/local/include/openmpi-mp
+extra-lib-dirs:
+  - /opt/local/lib/openmpi-mp
+```
+
+Both these settings are there by default.
