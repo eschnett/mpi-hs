@@ -2,8 +2,8 @@ name: mpi-hs
 version: '0.1.0.1'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
-author: "Erik Schnetter"
-maintainer: "Erik Schnetter"
+author: "Erik Schnetter <schnetter@gmail.com>"
+maintainer: "Erik Schnetter <schnetter@gmail.com>"
 category: Distributed Computing
 synopsis: MPI bindings for Haskell
 description: |
@@ -42,7 +42,8 @@ ghc-options:
 
 library:
   dependencies:
-    - base >=4.11 && <4.12
+    # - base >=4.11.1.0 && <4.12
+    - base
   build-tools:
     - c2hs
   source-dirs:

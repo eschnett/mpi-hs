@@ -2,6 +2,8 @@
 
 [MPI](https://www.mpi-forum.org) bindings for Haskell
 
+[Github](https://github.com/eschnett/mpi-hs)
+[Hackage](http://hackage.haskell.org/package/mpi-hs)
 [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
 
 
