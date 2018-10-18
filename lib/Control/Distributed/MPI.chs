@@ -237,6 +237,8 @@ import Prelude hiding (fromEnum, fst, init, toEnum)
 import qualified Prelude
 
 import Control.Monad (liftM)
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Unsafe as B
 import Data.Coerce
 import Data.IORef
 import Data.Ix
@@ -615,6 +617,8 @@ instance HasDatatype CUChar where datatype = datatypeUnsignedChar
 instance HasDatatype CUInt where datatype = datatypeUnsigned
 instance HasDatatype CULong where datatype = datatypeUnsignedLong
 instance HasDatatype CUShort where datatype = datatypeUnsignedShort
+
+instance HasDatatype B.ByteString where datatype = datatype @CChar
 
 -- instance Coercible Int CChar => HasDatatype Int where
 --   datatype = datatype @CChar
