@@ -8,6 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 #include <mpi.h>
@@ -307,16 +308,24 @@ peekInt = liftM fromIntegral . peek
 -- | A generic pointer-like type that supports converting to a 'Ptr'.
 -- This class describes the buffers used to send and receive messages.
 class Pointer p where
-  withPtr :: Storable a => p a -> (Ptr a -> IO b) -> IO b
+  type Pointee p
+  withPtr :: p -> (Ptr (Pointee p) -> IO b) -> IO b
 
-instance Pointer Ptr where
+instance Storable a => Pointer (Ptr a) where
+  type Pointee (Ptr a) = a
   withPtr p f = f p
 
-instance Pointer ForeignPtr where
+instance Storable a => Pointer (ForeignPtr a) where
+  type Pointee (ForeignPtr a) = a
   withPtr = withForeignPtr
 
-instance Pointer StablePtr where
+instance Storable a => Pointer (StablePtr a) where
+  type Pointee (StablePtr a) = a
   withPtr p f = f (castPtr (castStablePtrToPtr p))
+
+instance Pointer B.ByteString where
+  type Pointee B.ByteString = CChar
+  withPtr = B.unsafeUseAsCString
 
 
 
@@ -810,11 +819,11 @@ withStatusIgnore = withStatus statusIgnore
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 allgather :: forall a b p q.
-             ( Pointer p, Pointer q
+             ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
              , Storable a, HasDatatype a, Storable b, HasDatatype b)
-          => p a                -- ^ Source buffer
+          => p                  -- ^ Source buffer
           -> Count              -- ^ Number of source elements
-          -> q b                -- ^ Destination buffer
+          -> q                  -- ^ Destination buffer
           -> Count              -- ^ Number of destination elements
           -> Comm               -- ^ Communicator
           -> IO ()
@@ -840,9 +849,10 @@ allgather sendbuf sendcount recvbuf recvcount comm =
 -- The MPI datatype is determined automatically from the buffer
 -- pointer types.
 allreduce :: forall a p q.
-             ( Pointer p, Pointer q, Storable a, HasDatatype a)
-          => p a                -- ^ Source buffer
-          -> q a                -- ^ Destination buffer
+             ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+             , Storable a, HasDatatype a)
+          => p                  -- ^ Source buffer
+          -> q                  -- ^ Destination buffer
           -> Count              -- ^ Number of elements
           -> Op                 -- ^ Reduction operation
           -> Comm               -- ^ Communicator
@@ -868,11 +878,11 @@ allreduce sendbuf recvbuf count op comm =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 alltoall :: forall a b p q.
-            ( Pointer p, Pointer q
+            ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
             , Storable a, HasDatatype a, Storable b, HasDatatype b)
-         => p a                 -- ^ Source buffer
+         => p                   -- ^ Source buffer
          -> Count               -- ^ Number of source elements
-         -> q b                 -- ^ Destination buffer
+         -> q                   -- ^ Destination buffer
          -> Count               -- ^ Number of destination elements
          -> Comm                -- ^ Communicator
          -> IO ()
@@ -901,8 +911,8 @@ alltoall sendbuf sendcount recvbuf recvcount comm =
 -- @[MPI_Bcast](https://www.open-mpi.org/doc/current/man3/MPI_Bcast.3.php)@).
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-bcast :: forall a p. (Pointer p, Storable a, HasDatatype a)
-      => p a -- ^ Buffer pointer (read on the root process, written on
+bcast :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
+      => p   -- ^ Buffer pointer (read on the root process, written on
              -- all other processes)
       -> Count                  -- ^ Number of elements
       -> Rank                   -- ^ Root rank (sending process)
@@ -955,9 +965,10 @@ bcast buf count root comm =
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
 exscan :: forall a p q.
-          ( Pointer p, Pointer q, Storable a, HasDatatype a)
-       => p a                   -- ^ Source buffer
-       -> q a                   -- ^ Destination buffer
+          ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+          , Storable a, HasDatatype a)
+       => p                     -- ^ Source buffer
+       -> q                     -- ^ Destination buffer
        -> Count                 -- ^ Number of elements
        -> Op                    -- ^ Reduction operation
        -> Comm                  -- ^ Communicator
@@ -990,11 +1001,11 @@ exscan sendbuf recvbuf count op comm =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 gather :: forall a b p q.
-          ( Pointer p, Pointer q
+          ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
           , Storable a, HasDatatype a, Storable b, HasDatatype b)
-       => p a                   -- ^ Source buffer
+       => p                     -- ^ Source buffer
        -> Count                 -- ^ Number of source elements
-       -> q b  -- ^ Destination buffer (only used on the root process)
+       -> q    -- ^ Destination buffer (only used on the root process)
        -> Count -- ^ Number of destination elements (only used on the
                 -- root process)
        -> Rank                  -- ^ Root rank
@@ -1014,7 +1025,7 @@ gather sendbuf sendcount recvbuf recvcount root comm =
 {#fun unsafe Get_count as ^
     { withStatus* `Status'      -- ^ Message status
     , withDatatype* %`Datatype' -- ^ MPI datatype
-    , alloca- `Int' peekInt*
+    , alloca- `Count' peekCoerce*
     } -> `()' return*-#}
 
 -- | Get the number of elements in message, in terms of sub-object of
@@ -1097,11 +1108,11 @@ getVersion =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 iallgather :: forall a b p q.
-              ( Pointer p, Pointer q
+              ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
               , Storable a, HasDatatype a, Storable b, HasDatatype b)
-           => p a               -- ^ Source buffer
+           => p                 -- ^ Source buffer
            -> Count             -- ^ Number of source elements
-           -> q b               -- ^ Destination buffer
+           -> q                 -- ^ Destination buffer
            -> Count             -- ^ Number of destination elements
            -> Comm              -- ^ Communicator
            -> IO Request        -- ^ Communication request
@@ -1130,9 +1141,10 @@ iallgather sendbuf sendcount recvbuf recvcount comm =
 -- The MPI datatype is determined automatically from the buffer
 -- pointer types.
 iallreduce :: forall a p q.
-              ( Pointer p, Pointer q, Storable a, HasDatatype a)
-           => p a               -- ^ Source buffer
-           -> q a               -- ^ Destination buffer
+              ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+              , Storable a, HasDatatype a)
+           => p                 -- ^ Source buffer
+           -> q                 -- ^ Destination buffer
            -> Count             -- ^ Number of elements
            -> Op                -- ^ Reduction operation
            -> Comm              -- ^ Communicator
@@ -1162,11 +1174,11 @@ iallreduce sendbuf recvbuf count op comm =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 ialltoall :: forall a b p q.
-             ( Pointer p, Pointer q
+             ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
              , Storable a, HasDatatype a, Storable b, HasDatatype b)
-          => p a                -- ^ Source buffer
+          => p                  -- ^ Source buffer
           -> Count              -- ^ Number of source elements
-          -> q b                -- ^ Destination buffer
+          -> q                  -- ^ Destination buffer
           -> Count              -- ^ Number of destination elements
           -> Comm               -- ^ Communicator
           -> IO Request         -- ^ Communication request
@@ -1202,8 +1214,8 @@ ialltoall sendbuf sendcount recvbuf recvcount comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-ibcast :: forall a p. (Pointer p, Storable a, HasDatatype a)
-       => p a -- ^ Buffer pointer (read on the root process, written on
+ibcast :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
+       => p   -- ^ Buffer pointer (read on the root process, written on
               -- all other processes)
        -> Count                 -- ^ Number of elements
        -> Rank                  -- ^ Root rank (sending process)
@@ -1237,9 +1249,10 @@ ibcast buf count root comm =
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
 iexscan :: forall a p q.
-           ( Pointer p, Pointer q, Storable a, HasDatatype a)
-        => p a                  -- ^ Source buffer
-        -> q a                  -- ^ Destination buffer
+           ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+           , Storable a, HasDatatype a)
+        => p                    -- ^ Source buffer
+        -> q                    -- ^ Destination buffer
         -> Count                -- ^ Number of elements
         -> Op                   -- ^ Reduction operation
         -> Comm                 -- ^ Communicator
@@ -1269,11 +1282,11 @@ iexscan sendbuf recvbuf count op comm =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 igather :: forall a b p q.
-           ( Pointer p, Pointer q
+           ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
            , Storable a, HasDatatype a, Storable b, HasDatatype b)
-        => p a                  -- ^ Source buffer
+        => p                    -- ^ Source buffer
         -> Count                -- ^ Number of source elements
-        -> q b                  -- ^ Destination buffer (relevant only
+        -> q                    -- ^ Destination buffer (relevant only
                                 -- on the root process)
         -> Count                -- ^ Number of destination elements
                                 -- (relevant only on the root process)
@@ -1373,8 +1386,8 @@ iprobe_ rank tag comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-irecv :: forall a p. (Pointer p, Storable a, HasDatatype a)
-      => p a                    -- ^ Receive buffer
+irecv :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
+      => p                      -- ^ Receive buffer
       -> Count                  -- ^ Number of elements to receive
       -> Rank                   -- ^ Source rank (may be 'anySource')
       -> Tag                    -- ^ Message tag (may be 'anyTag')
@@ -1402,9 +1415,10 @@ irecv recvbuf recvcount recvrank recvtag comm =
 -- be freed by calling 'test', 'wait', or similar. The MPI datatypes
 -- are determined automatically from the buffer pointer types.
 ireduce :: forall a p q.
-           ( Pointer p, Pointer q, Storable a, HasDatatype a)
-        => p a                  -- ^ Source buffer
-        -> q a                  -- ^ Destination buffer
+           ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+           , Storable a, HasDatatype a)
+        => p                    -- ^ Source buffer
+        -> q                    -- ^ Destination buffer
         -> Count                -- ^ Number of elements
         -> Op                   -- ^ Reduction operation
         -> Rank                 -- ^ Root rank
@@ -1435,9 +1449,10 @@ ireduce sendbuf recvbuf count op rank comm =
 -- calling 'test', 'wait', or similar. The MPI datatype is determined
 -- automatically from the buffer pointer type.
 iscan :: forall a p q.
-         ( Pointer p, Pointer q, Storable a, HasDatatype a)
-      => p a                    -- ^ Source buffer
-      -> q a                    -- ^ Destination buffer
+         ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+         , Storable a, HasDatatype a)
+      => p                      -- ^ Source buffer
+      -> q                      -- ^ Destination buffer
       -> Count                  -- ^ Number of elements
       -> Op                     -- ^ Reduction operation
       -> Comm                   -- ^ Communicator
@@ -1467,11 +1482,11 @@ iscan sendbuf recvbuf count op comm =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 iscatter :: forall a b p q.
-            ( Pointer p, Pointer q
+            ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
             , Storable a, HasDatatype a, Storable b, HasDatatype b)
-         => p a     -- ^ Source buffer (only used on the root process)
+         => p       -- ^ Source buffer (only used on the root process)
          -> Count -- ^ Number of source elements (only used on the root process)
-         -> q b                 -- ^ Destination buffer
+         -> q                   -- ^ Destination buffer
          -> Count               -- ^ Number of destination elements
          -> Rank                -- ^ Root rank
          -> Comm                -- ^ Communicator
@@ -1499,8 +1514,8 @@ iscatter sendbuf sendcount recvbuf recvcount root comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-isend :: forall a p. (Pointer p, Storable a, HasDatatype a)
-      => p a                    -- ^ Send buffer
+isend :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
+      => p                      -- ^ Send buffer
       -> Count                  -- ^ Number of elements to send
       -> Rank                   -- ^ Destination rank
       -> Tag                    -- ^ Message tag
@@ -1545,8 +1560,8 @@ isend sendbuf sendcount sendrank sendtag comm =
 -- (@[MPI_Recv](https://www.open-mpi.org/doc/current/man3/MPI_Recv.3.php)@).
 -- The MPI datatypeis determined automatically from the buffer
 -- pointer type.
-recv :: forall a p. (Pointer p, Storable a, HasDatatype a)
-     => p a                     -- ^ Receive buffer
+recv :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
+     => p                       -- ^ Receive buffer
      -> Count                   -- ^ Number of elements to receive
      -> Rank                    -- ^ Source rank (may be 'anySource')
      -> Tag                     -- ^ Message tag (may be 'anyTag')
@@ -1571,8 +1586,8 @@ recv recvbuf recvcount recvrank recvtag comm =
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type. This function does not return a status, which might
 -- be more efficient if the status is not needed.
-recv_ :: forall a p. (Pointer p, Storable a, HasDatatype a)
-      => p a                    -- ^ Receive buffer
+recv_ :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
+      => p                      -- ^ Receive buffer
       -> Count                  -- ^ Number of elements to receive
       -> Rank                   -- ^ Source rank (may be 'anySource')
       -> Tag                    -- ^ Message tag (may be 'anyTag')
@@ -1597,9 +1612,10 @@ recv_ recvbuf recvcount recvrank recvtag comm =
 -- The result is only available on the root process. The MPI datatypes
 -- are determined automatically from the buffer pointer types.
 reduce :: forall a p q.
-          ( Pointer p, Pointer q, Storable a, HasDatatype a)
-       => p a                   -- ^ Source buffer
-       -> q a                   -- ^ Destination buffer
+          ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+          , Storable a, HasDatatype a)
+       => p                     -- ^ Source buffer
+       -> q                     -- ^ Destination buffer
        -> Count                 -- ^ Number of elements
        -> Op                    -- ^ Reduction operation
        -> Rank                  -- ^ Root rank
@@ -1627,9 +1643,10 @@ reduce sendbuf recvbuf count op rank comm =
 --  from rank @0@ to rank @r@ (inclusive). The MPI datatype is
 --  determined automatically from the buffer pointer type.
 scan :: forall a p q.
-        ( Pointer p, Pointer q, Storable a, HasDatatype a)
-     => p a                     -- ^ Source buffer
-     -> q a                     -- ^ Destination buffer
+        ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
+        , Storable a, HasDatatype a)
+     => p                       -- ^ Source buffer
+     -> q                       -- ^ Destination buffer
      -> Count                   -- ^ Number of elements
      -> Op                      -- ^ Reduction operation
      -> Comm                    -- ^ Communicator
@@ -1655,11 +1672,11 @@ scan sendbuf recvbuf count op comm =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 scatter :: forall a b p q.
-           ( Pointer p, Pointer q
+           ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
            , Storable a, HasDatatype a, Storable b, HasDatatype b)
-        => p a      -- ^ Source buffer (only used on the root process)
+        => p        -- ^ Source buffer (only used on the root process)
         -> Count -- ^ Number of source elements (only used on the root process)
-        -> q b                  -- ^ Destination buffer
+        -> q                    -- ^ Destination buffer
         -> Count                -- ^ Number of destination elements
         -> Rank                 -- ^ Root rank
         -> Comm                 -- ^ Communicator
@@ -1684,8 +1701,8 @@ scatter sendbuf sendcount recvbuf recvcount root comm =
 -- (@[MPI_Send](https://www.open-mpi.org/doc/current/man3/MPI_Send.3.php)@).
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-send :: forall a p. (Pointer p, Storable a, HasDatatype a)
-     => p a                     -- ^ Send buffer
+send :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
+     => p                       -- ^ Send buffer
      -> Count                   -- ^ Number of elements to send
      -> Rank                    -- ^ Destination rank
      -> Tag                     -- ^ Message tag
@@ -1715,13 +1732,13 @@ send sendbuf sendcount sendrank sendtag comm =
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
 sendrecv :: forall a b p q.
-            ( Pointer p, Pointer q
+            ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
             , Storable a, HasDatatype a, Storable b, HasDatatype b)
-         => p a                 -- ^ Send buffer
+         => p                   -- ^ Send buffer
          -> Count               -- ^ Number of elements to send
          -> Rank                -- ^ Destination rank
          -> Tag                 -- ^ Sent message tag
-         -> q b                 -- ^ Receive buffer
+         -> q                   -- ^ Receive buffer
          -> Count               -- ^ Number of elements to receive
          -> Rank                -- ^ Source rank (may be 'anySource')
          -> Tag                 -- ^ Received message tag (may be 'anyTag')
@@ -1757,13 +1774,13 @@ sendrecv sendbuf sendcount sendrank sendtag
 -- pointer types. This function does not return a status, which might
 -- be more efficient if the status is not needed.
 sendrecv_ :: forall a b p q.
-             ( Pointer p, Pointer q
+             ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
              , Storable a, HasDatatype a, Storable b, HasDatatype b)
-          => p a                -- ^ Send buffer
+          => p                  -- ^ Send buffer
           -> Count              -- ^ Number of elements to send
           -> Rank               -- ^ Destination rank
           -> Tag                -- ^ Sent message tag
-          -> q a                -- ^ Receive buffer
+          -> q                  -- ^ Receive buffer
           -> Count              -- ^ Number of elements to receive
           -> Rank               -- ^ Source rank (may be 'anySource')
           -> Tag                -- ^ Received message tag (may be 'anyTag')
