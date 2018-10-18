@@ -88,10 +88,10 @@ tests:
       - base
       - monad-loops
       - mpi-hs
-      - tasty
-      - tasty-hunit
-      - tasty-hspec
-      - unix
+      # - tasty
+      # - tasty-hunit
+      # - tasty-hspec
+      # - unix
     ghc-options:
       - -rtsopts
       - -threaded
