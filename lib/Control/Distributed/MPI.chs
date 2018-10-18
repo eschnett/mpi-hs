@@ -204,6 +204,8 @@ module Control.Distributed.MPI
   , iprobe_
   , irecv
   , isend
+  , requestGetStatus
+  , requestGetStatus_
   , test
   , test_
 
@@ -1588,6 +1590,47 @@ reduce sendbuf recvbuf op rank comm =
   assert (sendcount == recvcount && senddatatype == recvdatatype) $
   reduceTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op rank
               comm
+
+requestGetStatusBool :: Request -> IO (Bool, Status)
+requestGetStatusBool req =
+  withRequest req $ \req' ->
+  alloca $ \flag ->
+  do st <- Status <$> mallocForeignPtrBytes {#sizeof MPI_Status#}
+     withStatus st $ \st' ->
+       do _ <- {#call Request_get_status as requestGetStatusBool_#}
+               (castPtr req') flag st'
+          b <- peekBool flag
+          return (b, st)
+
+-- | Check whether a communication has completed without freeing the
+-- communication request
+-- (@[MPI_Request_get_status](https://www.open-mpi.org/doc/current/man3/MPI_Request_get_status.3.php)@).
+requestGetStatus :: Request     -- ^ Communication request
+                 -> IO (Maybe Status) -- ^ 'Just' 'Status' if the
+                                      -- request has completed, else
+                                      -- 'Nothing'
+requestGetStatus req = bool2maybe <$> requestGetStatusBool req
+
+-- {#fun Request_get_status as requestGetStatus_
+--     { withRequest* `Request'
+--     , alloca- `Bool' peekBool*
+--     , withStatusIgnore- `Status'
+--     } -> `()' return*-#}
+
+-- | Check whether a communication has completed without freeing the
+-- communication request
+-- (@[MPI_Request_get_status](https://www.open-mpi.org/doc/current/man3/MPI_Request_get_status.3.php)@).
+-- This function does not return a status, which might be more
+-- efficient if the status is not needed.
+requestGetStatus_ :: Request    -- ^ Communication request
+                  -> IO Bool    -- ^ Whether the request had completed
+requestGetStatus_ req =
+  withRequest req $ \req' ->
+  alloca $ \flag ->
+  withStatusIgnore $ \st ->
+  do _ <- {#call MPI_Request_get_status as requestGetStatus__#}
+          (castPtr req') flag st
+     peekBool flag
 
 {#fun Scan as scanTyped
     { id `Ptr ()'
