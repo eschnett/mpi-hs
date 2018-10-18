@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiWayIf #-}
@@ -84,8 +85,11 @@
 module Control.Distributed.MPI
   ( -- * Types, and associated functions constants
 
+    -- ** Communication buffers
+    Buffer(..)
+
     -- ** Communicators
-    Comm(..)
+  , Comm(..)
   , ComparisonResult(..)
   , commCompare
   , commRank
@@ -102,7 +106,6 @@ module Control.Distributed.MPI
 
     -- ** Datatypes
   , Datatype(..)
-  , Pointer(..)
   -- TODO: use a module for this namespace
   , datatypeNull
   , datatypeByte
@@ -236,7 +239,8 @@ module Control.Distributed.MPI
 import Prelude hiding (fromEnum, fst, init, toEnum)
 import qualified Prelude
 
-import Control.Monad (liftM)
+import Control.Exception
+import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
 import Data.Coerce
@@ -307,27 +311,35 @@ peekInt = liftM fromIntegral . peek
 
 
 
--- | A generic pointer-like type that supports converting to a 'Ptr'.
--- This class describes the buffers used to send and receive messages.
-class Pointer p where
-  type Pointee p
-  withPtr :: p -> (Ptr (Pointee p) -> IO b) -> IO b
+-- | A generic pointer-like type that supports converting to a 'Ptr',
+-- and which knows the type and number of its elements. This class
+-- describes the MPI buffers used to send and receive messages.
+class Buffer buf where
+  type Elem buf
+  withPtrLenType :: buf -> (Ptr (Elem buf) -> Count -> Datatype -> IO a) -> IO a
 
-instance Storable a => Pointer (Ptr a) where
-  type Pointee (Ptr a) = a
-  withPtr p f = f p
+instance (Storable a, HasDatatype a, Integral i) => Buffer (Ptr a, i) where
+  type Elem (Ptr a, i) = a
+  withPtrLenType (ptr, len) f = f ptr (toCount len) (getDatatype @a)
 
-instance Storable a => Pointer (ForeignPtr a) where
-  type Pointee (ForeignPtr a) = a
-  withPtr = withForeignPtr
+instance (Storable a, HasDatatype a, Integral i) => Buffer (ForeignPtr a, i)
+    where
+  type Elem (ForeignPtr a, i) = a
+  withPtrLenType (fptr, len) f =
+    withForeignPtr fptr $ \ptr -> f ptr (toCount len) (getDatatype @a)
 
-instance Storable a => Pointer (StablePtr a) where
-  type Pointee (StablePtr a) = a
-  withPtr p f = f (castPtr (castStablePtrToPtr p))
+instance (Storable a, HasDatatype a, Integral i) => Buffer (StablePtr a, i)
+    where
+  type Elem (StablePtr a, i) = a
+  withPtrLenType (ptr, len) f =
+    f (castPtr (castStablePtrToPtr ptr)) (toCount len) (getDatatype @a)
 
-instance Pointer B.ByteString where
-  type Pointee B.ByteString = CChar
-  withPtr = B.unsafeUseAsCString
+instance Buffer B.ByteString where
+  type Elem B.ByteString = CChar
+  withPtrLenType bs f =
+    B.unsafeUseAsCString bs $ \ptr -> f ptr (toCount (B.length bs)) datatypeByte
+
+-- instance Store a => Buffer a where
 
 
 
@@ -605,20 +617,18 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
 -- | A type class mapping Haskell types to MPI datatypes. This is used
 -- to automatically determine the MPI datatype for communication
 -- buffers.
-class HasDatatype a where datatype :: Datatype
-instance HasDatatype CChar where datatype = datatypeChar
-instance HasDatatype CDouble where datatype = datatypeDouble
-instance HasDatatype CFloat where datatype = datatypeFloat
-instance HasDatatype CInt where datatype = datatypeInt
-instance HasDatatype CLLong where datatype = datatypeLongLongInt
-instance HasDatatype CLong where datatype = datatypeLong
-instance HasDatatype CShort where datatype = datatypeShort
-instance HasDatatype CUChar where datatype = datatypeUnsignedChar
-instance HasDatatype CUInt where datatype = datatypeUnsigned
-instance HasDatatype CULong where datatype = datatypeUnsignedLong
-instance HasDatatype CUShort where datatype = datatypeUnsignedShort
-
-instance HasDatatype B.ByteString where datatype = datatype @CChar
+class HasDatatype a where getDatatype :: Datatype
+instance HasDatatype CChar where getDatatype = datatypeChar
+instance HasDatatype CDouble where getDatatype = datatypeDouble
+instance HasDatatype CFloat where getDatatype = datatypeFloat
+instance HasDatatype CInt where getDatatype = datatypeInt
+instance HasDatatype CLLong where getDatatype = datatypeLongLongInt
+instance HasDatatype CLong where getDatatype = datatypeLong
+instance HasDatatype CShort where getDatatype = datatypeShort
+instance HasDatatype CUChar where getDatatype = datatypeUnsignedChar
+instance HasDatatype CUInt where getDatatype = datatypeUnsigned
+instance HasDatatype CULong where getDatatype = datatypeUnsignedLong
+instance HasDatatype CUShort where getDatatype = datatypeUnsignedShort
 
 -- instance Coercible Int CChar => HasDatatype Int where
 --   datatype = datatype @CChar
@@ -745,13 +755,13 @@ instance HasDatatype B.ByteString where datatype = datatype @CChar
 {#fun pure mpihs_get_sum as opSum {+} -> `Op'#}
 
 instance HasDatatype a => HasDatatype (Monoid.Product a) where
-  datatype = datatype @a
+  getDatatype = getDatatype @a
 instance HasDatatype a => HasDatatype (Monoid.Sum a) where
-  datatype = datatype @a
+  getDatatype = getDatatype @a
 instance HasDatatype a => HasDatatype (Semigroup.Max a) where
-  datatype = datatype @a
+  getDatatype = getDatatype @a
 instance HasDatatype a => HasDatatype (Semigroup.Min a) where
-  datatype = datatype @a
+  getDatatype = getDatatype @a
 
 -- class (Monoid a, HasDatatype a) => HasOp a where op :: Op
 -- instance (Num a, HasDatatype a) => HasOp (Monoid.Product a) where
@@ -820,22 +830,16 @@ withStatusIgnore = withStatus statusIgnore
 -- | Gather data from all processes and broadcast the result
 -- (collective,
 -- @[MPI_Allgather](https://www.open-mpi.org/doc/current/man3/MPI_Allgather.3.php)@).
--- The MPI datatypes are determined automatically from the buffer
--- pointer types.
-allgather :: forall a b p q.
-             ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-             , Storable a, HasDatatype a, Storable b, HasDatatype b)
-          => p                  -- ^ Source buffer
-          -> Count              -- ^ Number of source elements
-          -> q                  -- ^ Destination buffer
-          -> Count              -- ^ Number of destination elements
+allgather :: (Buffer sb, Buffer rb)
+          => sb                 -- ^ Source buffer
+          -> rb                 -- ^ Destination buffer
           -> Comm               -- ^ Communicator
           -> IO ()
-allgather sendbuf sendcount recvbuf recvcount comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  allgatherTyped (castPtr sendbuf') sendcount (datatype @a)
-                 (castPtr recvbuf') recvcount (datatype @b)
+allgather sendbuf recvbuf comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  allgatherTyped (castPtr sendptr) sendcount senddatatype
+                 (castPtr recvptr) recvcount recvdatatype
                  comm
 
 {#fun Allreduce as allreduceTyped
@@ -852,19 +856,17 @@ allgather sendbuf sendcount recvbuf recvcount comm =
 -- @[MPI_Allreduce](https://www.open-mpi.org/doc/current/man3/MPI_Allreduce.3.php)@).
 -- The MPI datatype is determined automatically from the buffer
 -- pointer types.
-allreduce :: forall a p q.
-             ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-             , Storable a, HasDatatype a)
-          => p                  -- ^ Source buffer
-          -> q                  -- ^ Destination buffer
-          -> Count              -- ^ Number of elements
+allreduce :: (Buffer sb, Buffer rb)
+          => sb                 -- ^ Source buffer
+          -> rb                 -- ^ Destination buffer
           -> Op                 -- ^ Reduction operation
           -> Comm               -- ^ Communicator
           -> IO ()
-allreduce sendbuf recvbuf count op comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  allreduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op
+allreduce sendbuf recvbuf op comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  allreduceTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op
                  comm
 
 {#fun Alltoall as alltoallTyped
@@ -881,20 +883,16 @@ allreduce sendbuf recvbuf count op comm =
 -- @[MPI_Alltoall](https://www.open-mpi.org/doc/current/man3/MPI_Alltoall.php)@).
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-alltoall :: forall a b p q.
-            ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-            , Storable a, HasDatatype a, Storable b, HasDatatype b)
-         => p                   -- ^ Source buffer
-         -> Count               -- ^ Number of source elements
-         -> q                   -- ^ Destination buffer
-         -> Count               -- ^ Number of destination elements
+alltoall :: (Buffer sb, Buffer rb)
+         => sb                  -- ^ Source buffer
+         -> rb                  -- ^ Destination buffer
          -> Comm                -- ^ Communicator
          -> IO ()
-alltoall sendbuf sendcount recvbuf recvcount comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  alltoallTyped (castPtr sendbuf') sendcount (datatype @a)
-                (castPtr recvbuf') recvcount (datatype @b)
+alltoall sendbuf recvbuf comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  alltoallTyped (castPtr sendptr) sendcount senddatatype
+                (castPtr recvptr) recvcount recvdatatype
                 comm
 
 -- | Barrier (collective,
@@ -915,16 +913,15 @@ alltoall sendbuf sendcount recvbuf recvcount comm =
 -- @[MPI_Bcast](https://www.open-mpi.org/doc/current/man3/MPI_Bcast.3.php)@).
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-bcast :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
-      => p   -- ^ Buffer pointer (read on the root process, written on
-             -- all other processes)
-      -> Count                  -- ^ Number of elements
+bcast :: Buffer b
+      => b -- ^ Buffer (read on the root process, written on all other
+           -- processes)
       -> Rank                   -- ^ Root rank (sending process)
       -> Comm                   -- ^ Communicator
       -> IO ()
-bcast buf count root comm =
-  withPtr buf $ \buf' ->
-  bcastTyped (castPtr buf') count (datatype @a) root comm
+bcast buf root comm =
+  withPtrLenType buf $ \ptr count datatype ->
+  bcastTyped (castPtr ptr) count datatype root comm
 
 -- | Compare two communicators
 -- (@[MPI_Comm_compare](https://www.open-mpi.org/doc/current/man3/MPI_Comm_compare.3.php)@).
@@ -968,19 +965,17 @@ bcast buf count root comm =
 --
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-exscan :: forall a p q.
-          ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-          , Storable a, HasDatatype a)
-       => p                     -- ^ Source buffer
-       -> q                     -- ^ Destination buffer
-       -> Count                 -- ^ Number of elements
+exscan :: (Buffer sb, Buffer rb)
+       => sb                    -- ^ Source buffer
+       -> rb                    -- ^ Destination buffer
        -> Op                    -- ^ Reduction operation
        -> Comm                  -- ^ Communicator
        -> IO ()
-exscan sendbuf recvbuf count op comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  exscanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
+exscan sendbuf recvbuf op comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  exscanTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op comm
 
 -- | Finalize (shut down) the MPI library (collective, @[MPI_Finalize](https://www.open-mpi.org/doc/current/man3/MPI_Finalize.3.php)@).
 {#fun Finalize as ^ {} -> `()' return*-#}
@@ -1004,22 +999,17 @@ exscan sendbuf recvbuf count op comm =
 -- @[MPI_Gather](https://www.open-mpi.org/doc/current/man3/MPI_Gather.3.php)@).
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-gather :: forall a b p q.
-          ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-          , Storable a, HasDatatype a, Storable b, HasDatatype b)
-       => p                     -- ^ Source buffer
-       -> Count                 -- ^ Number of source elements
-       -> q    -- ^ Destination buffer (only used on the root process)
-       -> Count -- ^ Number of destination elements (only used on the
-                -- root process)
+gather :: (Buffer sb, Buffer rb)
+       => sb                    -- ^ Source buffer
+       -> rb   -- ^ Destination buffer (only used on the root process)
        -> Rank                  -- ^ Root rank
        -> Comm                  -- ^ Communicator
        -> IO ()
-gather sendbuf sendcount recvbuf recvcount root comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  gatherTyped (castPtr sendbuf') sendcount (datatype @a)
-              (castPtr recvbuf') recvcount (datatype @b)
+gather sendbuf recvbuf root comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  gatherTyped (castPtr sendptr) sendcount senddatatype
+              (castPtr recvptr) recvcount recvdatatype
               root comm
 
 -- | Get the size of a message, in terms of objects of type 'Datatype'
@@ -1111,20 +1101,16 @@ getVersion =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-iallgather :: forall a b p q.
-              ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-              , Storable a, HasDatatype a, Storable b, HasDatatype b)
-           => p                 -- ^ Source buffer
-           -> Count             -- ^ Number of source elements
-           -> q                 -- ^ Destination buffer
-           -> Count             -- ^ Number of destination elements
+iallgather :: (Buffer sb, Buffer rb)
+           => sb                -- ^ Source buffer
+           -> rb                -- ^ Destination buffer
            -> Comm              -- ^ Communicator
            -> IO Request        -- ^ Communication request
-iallgather sendbuf sendcount recvbuf recvcount comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  iallgatherTyped (castPtr sendbuf') sendcount (datatype @a)
-                  (castPtr recvbuf') recvcount (datatype @b)
+iallgather sendbuf recvbuf comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  iallgatherTyped (castPtr sendptr) sendcount senddatatype
+                  (castPtr recvptr) recvcount recvdatatype
                   comm
 
 {#fun Iallreduce as iallreduceTyped
@@ -1144,19 +1130,17 @@ iallgather sendbuf sendcount recvbuf recvcount comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer types.
-iallreduce :: forall a p q.
-              ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-              , Storable a, HasDatatype a)
-           => p                 -- ^ Source buffer
-           -> q                 -- ^ Destination buffer
-           -> Count             -- ^ Number of elements
+iallreduce :: (Buffer sb, Buffer rb)
+           => sb                -- ^ Source buffer
+           -> rb                -- ^ Destination buffer
            -> Op                -- ^ Reduction operation
            -> Comm              -- ^ Communicator
            -> IO Request        -- ^ Communication request
-iallreduce sendbuf recvbuf count op comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  iallreduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op
+iallreduce sendbuf recvbuf op comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  iallreduceTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op
                   comm
 
 {#fun Ialltoall as ialltoallTyped
@@ -1177,20 +1161,16 @@ iallreduce sendbuf recvbuf count op comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-ialltoall :: forall a b p q.
-             ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-             , Storable a, HasDatatype a, Storable b, HasDatatype b)
-          => p                  -- ^ Source buffer
-          -> Count              -- ^ Number of source elements
-          -> q                  -- ^ Destination buffer
-          -> Count              -- ^ Number of destination elements
+ialltoall :: (Buffer sb, Buffer rb)
+          => sb                 -- ^ Source buffer
+          -> rb                 -- ^ Destination buffer
           -> Comm               -- ^ Communicator
           -> IO Request         -- ^ Communication request
-ialltoall sendbuf sendcount recvbuf recvcount comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  ialltoallTyped (castPtr sendbuf') sendcount (datatype @a)
-                 (castPtr recvbuf') recvcount (datatype @b)
+ialltoall sendbuf recvbuf comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  ialltoallTyped (castPtr sendptr) sendcount senddatatype
+                 (castPtr recvptr) recvcount recvdatatype
                  comm
 
 -- | Start a barrier, and return a handle to the communication request
@@ -1218,16 +1198,15 @@ ialltoall sendbuf sendcount recvbuf recvcount comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-ibcast :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
-       => p   -- ^ Buffer pointer (read on the root process, written on
-              -- all other processes)
-       -> Count                 -- ^ Number of elements
+ibcast :: Buffer b
+       => b      -- ^ Buffer (read on the root process, written on all
+                 -- other processes)
        -> Rank                  -- ^ Root rank (sending process)
        -> Comm                  -- ^ Communicator
        -> IO Request            -- ^ Communication request
-ibcast buf count root comm =
-  withPtr buf $ \buf' ->
-  ibcastTyped (castPtr buf') count (datatype @a) root comm
+ibcast buf root comm =
+  withPtrLenType buf $ \ptr count datatype->
+  ibcastTyped (castPtr ptr) count datatype root comm
 
 {#fun Iexscan as iexscanTyped
     { id `Ptr ()'
@@ -1252,19 +1231,18 @@ ibcast buf count root comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-iexscan :: forall a p q.
-           ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-           , Storable a, HasDatatype a)
-        => p                    -- ^ Source buffer
-        -> q                    -- ^ Destination buffer
-        -> Count                -- ^ Number of elements
+iexscan :: (Buffer sb, Buffer rb)
+        => sb                   -- ^ Source buffer
+        -> rb                   -- ^ Destination buffer
         -> Op                   -- ^ Reduction operation
         -> Comm                 -- ^ Communicator
         -> IO Request           -- ^ Communication request
-iexscan sendbuf recvbuf count op comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  iexscanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
+iexscan sendbuf recvbuf op comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  iexscanTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op
+               comm
 
 {#fun Igather as igatherTyped
     { id `Ptr ()'
@@ -1285,23 +1263,17 @@ iexscan sendbuf recvbuf count op comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-igather :: forall a b p q.
-           ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-           , Storable a, HasDatatype a, Storable b, HasDatatype b)
-        => p                    -- ^ Source buffer
-        -> Count                -- ^ Number of source elements
-        -> q                    -- ^ Destination buffer (relevant only
-                                -- on the root process)
-        -> Count                -- ^ Number of destination elements
-                                -- (relevant only on the root process)
+igather :: (Buffer rb, Buffer sb)
+        => sb                   -- ^ Source buffer
+        -> rb -- ^ Destination buffer (relevant only on the root process)
         -> Rank                 -- ^ Root rank
         -> Comm                 -- ^ Communicator
         -> IO Request           -- ^ Communication request
-igather sendbuf sendcount recvbuf recvcount root comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  igatherTyped (castPtr sendbuf') sendcount (datatype @a)
-               (castPtr recvbuf') recvcount (datatype @b)
+igather sendbuf recvbuf root comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  igatherTyped (castPtr sendptr) sendcount senddatatype
+               (castPtr recvptr) recvcount recvdatatype
                root comm
 
 -- | Return whether the MPI library has been initialized
@@ -1390,16 +1362,15 @@ iprobe_ rank tag comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-irecv :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
-      => p                      -- ^ Receive buffer
-      -> Count                  -- ^ Number of elements to receive
+irecv :: Buffer rb
+      => rb                     -- ^ Receive buffer
       -> Rank                   -- ^ Source rank (may be 'anySource')
       -> Tag                    -- ^ Message tag (may be 'anyTag')
       -> Comm                   -- ^ Communicator
       -> IO Request             -- ^ Communication request
-irecv recvbuf recvcount recvrank recvtag comm =
-  withPtr recvbuf $ \recvbuf' ->
-  irecvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
+irecv recvbuf recvrank recvtag comm =
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  irecvTyped (castPtr recvptr) recvcount recvdatatype recvrank recvtag comm
 
 {#fun Ireduce as ireduceTyped
     { id `Ptr ()'
@@ -1418,21 +1389,19 @@ irecv recvbuf recvcount recvrank recvtag comm =
 -- The result is only available on the root process. The request must
 -- be freed by calling 'test', 'wait', or similar. The MPI datatypes
 -- are determined automatically from the buffer pointer types.
-ireduce :: forall a p q.
-           ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-           , Storable a, HasDatatype a)
-        => p                    -- ^ Source buffer
-        -> q                    -- ^ Destination buffer
-        -> Count                -- ^ Number of elements
+ireduce :: (Buffer sb, Buffer rb)
+        => sb                   -- ^ Source buffer
+        -> rb                   -- ^ Destination buffer
         -> Op                   -- ^ Reduction operation
         -> Rank                 -- ^ Root rank
         -> Comm                 -- ^ Communicator
         -> IO Request           -- ^ Communication request
-ireduce sendbuf recvbuf count op rank comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  ireduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op rank
-               comm
+ireduce sendbuf recvbuf op rank comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  ireduceTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op
+               rank comm
 
 {#fun Iscan as iscanTyped
     { id `Ptr ()'
@@ -1452,19 +1421,17 @@ ireduce sendbuf recvbuf count op rank comm =
 -- from rank @0@ to rank @r@ (inclusive). The request must be freed by
 -- calling 'test', 'wait', or similar. The MPI datatype is determined
 -- automatically from the buffer pointer type.
-iscan :: forall a p q.
-         ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-         , Storable a, HasDatatype a)
-      => p                      -- ^ Source buffer
-      -> q                      -- ^ Destination buffer
-      -> Count                  -- ^ Number of elements
+iscan :: (Buffer sb, Buffer rb)
+      => sb                     -- ^ Source buffer
+      -> rb                     -- ^ Destination buffer
       -> Op                     -- ^ Reduction operation
       -> Comm                   -- ^ Communicator
       -> IO Request             -- ^ Communication request
-iscan sendbuf recvbuf count op comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  iscanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
+iscan sendbuf recvbuf op comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  iscanTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op comm
 
 {#fun Iscatter as iscatterTyped
     { id `Ptr ()'
@@ -1485,21 +1452,17 @@ iscan sendbuf recvbuf count op comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-iscatter :: forall a b p q.
-            ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-            , Storable a, HasDatatype a, Storable b, HasDatatype b)
-         => p       -- ^ Source buffer (only used on the root process)
-         -> Count -- ^ Number of source elements (only used on the root process)
-         -> q                   -- ^ Destination buffer
-         -> Count               -- ^ Number of destination elements
+iscatter :: (Buffer sb, Buffer rb)
+         => sb      -- ^ Source buffer (only used on the root process)
+         -> rb                  -- ^ Destination buffer
          -> Rank                -- ^ Root rank
          -> Comm                -- ^ Communicator
          -> IO Request          -- ^ Communication request
-iscatter sendbuf sendcount recvbuf recvcount root comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  iscatterTyped (castPtr sendbuf') sendcount (datatype @a)
-                (castPtr recvbuf') recvcount (datatype @b)
+iscatter sendbuf recvbuf root comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  iscatterTyped (castPtr sendptr) sendcount senddatatype
+                (castPtr recvptr) recvcount recvdatatype
                 root comm
 
 {#fun Isend as isendTyped
@@ -1518,16 +1481,15 @@ iscatter sendbuf sendcount recvbuf recvcount root comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-isend :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
-      => p                      -- ^ Send buffer
-      -> Count                  -- ^ Number of elements to send
+isend :: Buffer sb
+      => sb                     -- ^ Send buffer
       -> Rank                   -- ^ Destination rank
       -> Tag                    -- ^ Message tag
       -> Comm                   -- ^ Communicator
       -> IO Request             -- ^ Communication request
-isend sendbuf sendcount sendrank sendtag comm =
-  withPtr sendbuf $ \sendbuf' ->
-  isendTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag comm
+isend sendbuf sendrank sendtag comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  isendTyped (castPtr sendptr) sendcount senddatatype sendrank sendtag comm
 
 -- | Probe (wait) for an incoming message
 -- (@[MPI_Probe](https://www.open-mpi.org/doc/current/man3/MPI_Probe.3.php)@).
@@ -1564,16 +1526,15 @@ isend sendbuf sendcount sendrank sendtag comm =
 -- (@[MPI_Recv](https://www.open-mpi.org/doc/current/man3/MPI_Recv.3.php)@).
 -- The MPI datatypeis determined automatically from the buffer
 -- pointer type.
-recv :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
-     => p                       -- ^ Receive buffer
-     -> Count                   -- ^ Number of elements to receive
+recv :: Buffer rb
+     => rb                      -- ^ Receive buffer
      -> Rank                    -- ^ Source rank (may be 'anySource')
      -> Tag                     -- ^ Message tag (may be 'anyTag')
      -> Comm                    -- ^ Communicator
      -> IO Status               -- ^ Message status
-recv recvbuf recvcount recvrank recvtag comm =
-  withPtr recvbuf $ \recvbuf' ->
-  recvTyped (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
+recv recvbuf recvrank recvtag comm =
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  recvTyped (castPtr recvptr) recvcount recvdatatype recvrank recvtag comm
 
 {#fun Recv as recvTyped_
     { id `Ptr ()'
@@ -1590,16 +1551,15 @@ recv recvbuf recvcount recvrank recvtag comm =
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type. This function does not return a status, which might
 -- be more efficient if the status is not needed.
-recv_ :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
-      => p                      -- ^ Receive buffer
-      -> Count                  -- ^ Number of elements to receive
+recv_ :: Buffer rb
+      => rb                     -- ^ Receive buffer
       -> Rank                   -- ^ Source rank (may be 'anySource')
       -> Tag                    -- ^ Message tag (may be 'anyTag')
       -> Comm                   -- ^ Communicator
       -> IO ()
-recv_ recvbuf recvcount recvrank recvtag comm =
-  withPtr recvbuf $ \recvbuf' ->
-  recvTyped_ (castPtr recvbuf') recvcount (datatype @a) recvrank recvtag comm
+recv_ recvbuf recvrank recvtag comm =
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  recvTyped_ (castPtr recvptr) recvcount recvdatatype recvrank recvtag comm
 
 {#fun Reduce as reduceTyped
     { id `Ptr ()'
@@ -1615,20 +1575,18 @@ recv_ recvbuf recvcount recvrank recvtag comm =
 -- @[MPI_Reduce](https://www.open-mpi.org/doc/current/man3/MPI_Reduce.3.php)@).
 -- The result is only available on the root process. The MPI datatypes
 -- are determined automatically from the buffer pointer types.
-reduce :: forall a p q.
-          ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-          , Storable a, HasDatatype a)
-       => p                     -- ^ Source buffer
-       -> q                     -- ^ Destination buffer
-       -> Count                 -- ^ Number of elements
+reduce :: (Buffer sb, Buffer rb)
+       => sb                    -- ^ Source buffer
+       -> rb                    -- ^ Destination buffer
        -> Op                    -- ^ Reduction operation
        -> Rank                  -- ^ Root rank
        -> Comm                  -- ^ Communicator
        -> IO ()
-reduce sendbuf recvbuf count op rank comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  reduceTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op rank
+reduce sendbuf recvbuf op rank comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  reduceTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op rank
               comm
 
 {#fun Scan as scanTyped
@@ -1646,19 +1604,17 @@ reduce sendbuf recvbuf count op rank comm =
 --  Each process with rank @r@ receives the result of reducing data
 --  from rank @0@ to rank @r@ (inclusive). The MPI datatype is
 --  determined automatically from the buffer pointer type.
-scan :: forall a p q.
-        ( Pointer p, Pointer q, a ~ Pointee p, a ~ Pointee q
-        , Storable a, HasDatatype a)
-     => p                       -- ^ Source buffer
-     -> q                       -- ^ Destination buffer
-     -> Count                   -- ^ Number of elements
+scan :: (Buffer sb, Buffer rb)
+     => sb                      -- ^ Source buffer
+     -> rb                      -- ^ Destination buffer
      -> Op                      -- ^ Reduction operation
      -> Comm                    -- ^ Communicator
      -> IO ()
-scan sendbuf recvbuf count op comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  scanTyped (castPtr sendbuf') (castPtr recvbuf') count (datatype @a) op comm
+scan sendbuf recvbuf op comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  assert (sendcount == recvcount && senddatatype == recvdatatype) $
+  scanTyped (castPtr sendptr) (castPtr recvptr) sendcount senddatatype op comm
 
 {#fun Scatter as scatterTyped
     { id `Ptr ()'
@@ -1675,21 +1631,17 @@ scan sendbuf recvbuf count op comm =
 -- @[MPI_Scatter](https://www.open-mpi.org/doc/current/man3/MPI_Scatter.3.php)@).
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-scatter :: forall a b p q.
-           ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-           , Storable a, HasDatatype a, Storable b, HasDatatype b)
-        => p        -- ^ Source buffer (only used on the root process)
-        -> Count -- ^ Number of source elements (only used on the root process)
-        -> q                    -- ^ Destination buffer
-        -> Count                -- ^ Number of destination elements
+scatter :: (Buffer sb, Buffer rb)
+        => sb        -- ^ Source buffer (only used on the root process)
+        -> rb                   -- ^ Destination buffer
         -> Rank                 -- ^ Root rank
         -> Comm                 -- ^ Communicator
         -> IO ()
-scatter sendbuf sendcount recvbuf recvcount root comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  scatterTyped (castPtr sendbuf') sendcount (datatype @a)
-               (castPtr recvbuf') recvcount (datatype @b)
+scatter sendbuf recvbuf root comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  scatterTyped (castPtr sendptr) sendcount senddatatype
+               (castPtr recvptr) recvcount recvdatatype
                root comm
 
 {#fun Send as sendTyped
@@ -1705,16 +1657,15 @@ scatter sendbuf sendcount recvbuf recvcount root comm =
 -- (@[MPI_Send](https://www.open-mpi.org/doc/current/man3/MPI_Send.3.php)@).
 -- The MPI datatype is determined automatically from the buffer
 -- pointer type.
-send :: forall a p. (Pointer p, a ~ Pointee p, Storable a, HasDatatype a)
-     => p                       -- ^ Send buffer
-     -> Count                   -- ^ Number of elements to send
+send :: Buffer sb
+     => sb                      -- ^ Send buffer
      -> Rank                    -- ^ Destination rank
      -> Tag                     -- ^ Message tag
      -> Comm                    -- ^ Communicator
      -> IO ()
-send sendbuf sendcount sendrank sendtag comm =
-  withPtr sendbuf $ \sendbuf' ->
-  sendTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag comm
+send sendbuf sendrank sendtag comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  sendTyped (castPtr sendptr) sendcount senddatatype sendrank sendtag comm
 
 {#fun Sendrecv as sendrecvTyped
     { id `Ptr ()'
@@ -1735,26 +1686,22 @@ send sendbuf sendcount sendrank sendtag comm =
 -- (@[MPI_Sendrecv](https://www.open-mpi.org/doc/current/man3/MPI_Sendrecv.3.php)@).
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types.
-sendrecv :: forall a b p q.
-            ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-            , Storable a, HasDatatype a, Storable b, HasDatatype b)
-         => p                   -- ^ Send buffer
-         -> Count               -- ^ Number of elements to send
+sendrecv :: (Buffer sb, Buffer rb)
+         => sb                  -- ^ Send buffer
          -> Rank                -- ^ Destination rank
          -> Tag                 -- ^ Sent message tag
-         -> q                   -- ^ Receive buffer
-         -> Count               -- ^ Number of elements to receive
+         -> rb                  -- ^ Receive buffer
          -> Rank                -- ^ Source rank (may be 'anySource')
          -> Tag                 -- ^ Received message tag (may be 'anyTag')
          -> Comm                -- ^ Communicator
          -> IO Status           -- ^ Status for received message
-sendrecv sendbuf sendcount sendrank sendtag
-         recvbuf recvcount recvrank recvtag
+sendrecv sendbuf sendrank sendtag
+         recvbuf recvrank recvtag
          comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  sendrecvTyped (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag
-                (castPtr recvbuf') recvcount (datatype @b) recvrank recvtag
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  sendrecvTyped (castPtr sendptr) sendcount senddatatype sendrank sendtag
+                (castPtr recvptr) recvcount recvdatatype recvrank recvtag
                 comm
 
 {#fun Sendrecv as sendrecvTyped_
@@ -1777,26 +1724,22 @@ sendrecv sendbuf sendcount sendrank sendtag
 -- The MPI datatypes are determined automatically from the buffer
 -- pointer types. This function does not return a status, which might
 -- be more efficient if the status is not needed.
-sendrecv_ :: forall a b p q.
-             ( Pointer p, Pointer q, a ~ Pointee p, b ~ Pointee q
-             , Storable a, HasDatatype a, Storable b, HasDatatype b)
-          => p                  -- ^ Send buffer
-          -> Count              -- ^ Number of elements to send
+sendrecv_ :: (Buffer sb, Buffer rb)
+          => sb                 -- ^ Send buffer
           -> Rank               -- ^ Destination rank
           -> Tag                -- ^ Sent message tag
-          -> q                  -- ^ Receive buffer
-          -> Count              -- ^ Number of elements to receive
+          -> rb                 -- ^ Receive buffer
           -> Rank               -- ^ Source rank (may be 'anySource')
           -> Tag                -- ^ Received message tag (may be 'anyTag')
           -> Comm               -- ^ Communicator
           -> IO ()
-sendrecv_ sendbuf sendcount sendrank sendtag
-          recvbuf recvcount recvrank recvtag
+sendrecv_ sendbuf sendrank sendtag
+          recvbuf recvrank recvtag
           comm =
-  withPtr sendbuf $ \sendbuf' ->
-  withPtr recvbuf $ \recvbuf' ->
-  sendrecvTyped_ (castPtr sendbuf') sendcount (datatype @a) sendrank sendtag
-                 (castPtr recvbuf') recvcount (datatype @b) recvrank recvtag
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+  sendrecvTyped_ (castPtr sendptr) sendcount senddatatype sendrank sendtag
+                 (castPtr recvptr) recvcount recvdatatype recvrank recvtag
                  comm
 
 testBool :: Request -> IO (Bool, Status)

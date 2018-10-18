@@ -15,6 +15,8 @@ import System.IO
 
 import qualified Control.Distributed.MPI as MPI
 
+default (Int)
+
 
 
 --------------------------------------------------------------------------------
@@ -127,10 +129,10 @@ pointToPoint = testGroup "point-to-point"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
 
-       MPI.send buf 1 rank MPI.unitTag MPI.commWorld
+       MPI.send (buf, 1) rank MPI.unitTag MPI.commWorld
 
        buf' <- mallocForeignPtr @CInt
-       st <- MPI.recv buf' 1 rank MPI.unitTag MPI.commWorld
+       st <- MPI.recv (buf', 1) rank MPI.unitTag MPI.commWorld
        msg' <- withForeignPtr buf' peek
 
        source <- MPI.getSource st
@@ -148,8 +150,8 @@ pointToPoint = testGroup "point-to-point"
        buf' <- mallocForeignPtr @CInt
 
        st <- MPI.sendrecv
-             buf 1 ((rank + 1) `mod` size) MPI.unitTag
-             buf' 1 ((rank - 1) `mod` size) MPI.unitTag
+             (buf, 1) ((rank + 1) `mod` size) MPI.unitTag
+             (buf', 1) ((rank - 1) `mod` size) MPI.unitTag
              MPI.commWorld
 
        msg' <- withForeignPtr buf' peek
@@ -174,10 +176,10 @@ pointToPointNonBlocking = testGroup "point-to-point non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
 
-       req <- MPI.isend buf 1 rank MPI.unitTag MPI.commWorld
+       req <- MPI.isend (buf, 1) rank MPI.unitTag MPI.commWorld
 
        buf' <- mallocForeignPtr @CInt
-       req' <- MPI.irecv buf' 1 rank MPI.unitTag MPI.commWorld
+       req' <- MPI.irecv (buf', 1) rank MPI.unitTag MPI.commWorld
 
        MPI.wait_ req
        st <- MPI.wait req'
@@ -204,7 +206,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtrArray @CInt sz
-       MPI.allgather buf 1 buf' 1 MPI.commWorld
+       MPI.allgather (buf, 1) (buf', 1) MPI.commWorld
        msgs' <- withForeignPtr buf' (peekArray sz)
        msgs' == [42 .. 42 + fromIntegral (sz-1)] @? ""
   , testCase "allreduce" $
@@ -216,7 +218,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       MPI.allreduce buf buf' 1 MPI.opSum MPI.commWorld
+       MPI.allreduce (buf, 1) (buf', 1) MPI.opSum MPI.commWorld
        msg' <- withForeignPtr buf' peek
        msg' == sum [42 .. 42 + (sz-1)] @? ""
   , testCase "alltoall" $
@@ -228,7 +230,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtrArray @CInt sz
        withForeignPtr buf $ \ptr -> pokeArray ptr msgs
        buf' <- mallocForeignPtrArray @CInt sz
-       MPI.alltoall buf 1 buf' 1 MPI.commWorld
+       MPI.alltoall (buf, 1) (buf', 1) MPI.commWorld
        msgs' <- withForeignPtr buf' (peekArray sz)
        msgs' == (fromIntegral <$> [42 + sz * i + rk | i <- [0 .. sz-1]]) @? ""
   , testCase "barrier" $
@@ -239,7 +241,7 @@ collective = testGroup "collective"
        let msg = 42 + rk
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
-       MPI.bcast buf 1 MPI.rootRank MPI.commWorld
+       MPI.bcast (buf, 1) MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf peek
        msg' == 42 @? ""
   , testCase "exscan" $
@@ -249,7 +251,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       MPI.exscan buf buf' 1 MPI.opSum MPI.commWorld
+       MPI.exscan (buf, 1) (buf', 1) MPI.opSum MPI.commWorld
        msg' <- withForeignPtr buf' (if rank == 0 then \_ -> return 0 else peek)
        msg' == sum [42 .. 42 + rk-1] @? ""
   , testCase "gather" $
@@ -262,7 +264,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
-       MPI.gather buf 1 buf' 1 MPI.rootRank MPI.commWorld
+       MPI.gather (buf, 1) (buf', 1) MPI.rootRank MPI.commWorld
        msgs' <- withForeignPtr buf' $ peekArray (if isroot then sz else 0)
        (if isroot then msgs' == [42 .. 42 + fromIntegral sz-1] else True) @? ""
   , testCase "reduce" $
@@ -275,7 +277,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       MPI.reduce buf buf' 1 MPI.opSum MPI.rootRank MPI.commWorld
+       MPI.reduce (buf, 1) (buf', 1) MPI.opSum MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf' $ if isroot then peek else \_ -> return 0
        (if isroot then msg' == sum [42 .. 42 + sz-1] else True) @? ""
   , testCase "scan" $
@@ -285,7 +287,7 @@ collective = testGroup "collective"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       MPI.scan buf buf' 1 MPI.opSum MPI.commWorld
+       MPI.scan (buf, 1) (buf', 1) MPI.opSum MPI.commWorld
        msg' <- withForeignPtr buf' peek
        msg' == sum [42 .. 42 + rk] @? ""
   , testCase "scatter" $
@@ -300,7 +302,7 @@ collective = testGroup "collective"
        withForeignPtr buf $
          \ptr -> if isroot then pokeArray ptr msgs else return ()
        buf' <- mallocForeignPtr @CInt
-       MPI.scatter buf 1 buf' 1 MPI.rootRank MPI.commWorld
+       MPI.scatter (buf, 1) (buf', 1) MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf' peek
        msg' == 42 + rk @? ""
   ]
@@ -319,7 +321,7 @@ reductions = testGroup "reduction operations"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       MPI.reduce buf buf' 1 MPI.opMax MPI.rootRank MPI.commWorld
+       MPI.reduce (buf, 1) (buf', 1) MPI.opMax MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf' $ if isroot then peek else \_ -> return 0
        (if isroot then msg' == maximum [42 .. 42 + sz-1] else True) @? ""
   , testCase "min" $
@@ -332,7 +334,7 @@ reductions = testGroup "reduction operations"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       MPI.reduce buf buf' 1 MPI.opMin MPI.rootRank MPI.commWorld
+       MPI.reduce (buf, 1) (buf', 1) MPI.opMin MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf' $ if isroot then peek else \_ -> return 0
        (if isroot then msg' == minimum [42 .. 42 + sz-1] else True) @? ""
   , testCase "sum" $
@@ -345,7 +347,7 @@ reductions = testGroup "reduction operations"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       MPI.reduce buf buf' 1 MPI.opSum MPI.rootRank MPI.commWorld
+       MPI.reduce (buf, 1) (buf', 1) MPI.opSum MPI.rootRank MPI.commWorld
        msg' <- withForeignPtr buf' $ if isroot then peek else \_ -> return 0
        (if isroot then msg' == sum [42 .. 42 + sz-1] else True) @? ""
   ]
@@ -363,7 +365,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtrArray @CInt sz
-       req <- MPI.iallgather buf 1 buf' 1 MPI.commWorld
+       req <- MPI.iallgather (buf, 1) (buf', 1) MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msgs' <- withForeignPtr buf' (peekArray sz)
@@ -377,7 +379,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       req <- MPI.iallreduce buf buf' 1 MPI.opSum MPI.commWorld
+       req <- MPI.iallreduce (buf, 1) (buf', 1) MPI.opSum MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msg' <- withForeignPtr buf' peek
@@ -391,7 +393,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtrArray @CInt sz
        withForeignPtr buf $ \ptr -> pokeArray ptr msgs
        buf' <- mallocForeignPtrArray @CInt sz
-       req <- MPI.ialltoall buf 1 buf' 1 MPI.commWorld
+       req <- MPI.ialltoall (buf, 1) (buf', 1) MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msgs' <- withForeignPtr buf' (peekArray sz)
@@ -405,7 +407,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        let msg = 42 + rk
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
-       req <- MPI.ibcast buf 1 MPI.rootRank MPI.commWorld
+       req <- MPI.ibcast (buf, 1) MPI.rootRank MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msg' <- withForeignPtr buf peek
@@ -417,7 +419,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       req <- MPI.iexscan buf buf' 1 MPI.opSum MPI.commWorld
+       req <- MPI.iexscan (buf, 1) (buf', 1) MPI.opSum MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msg' <- withForeignPtr buf' (if rank == 0 then \_ -> return 0 else peek)
@@ -432,7 +434,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
-       req <- MPI.igather buf 1 buf' 1 MPI.rootRank MPI.commWorld
+       req <- MPI.igather (buf, 1) (buf', 1) MPI.rootRank MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msgs' <- withForeignPtr buf' $ peekArray (if isroot then sz else 0)
@@ -447,7 +449,8 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       req <- MPI.ireduce buf buf' 1 MPI.opSum MPI.rootRank MPI.commWorld
+       req <- MPI.ireduce (buf, 1) (buf', 1) MPI.opSum MPI.rootRank
+              MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msg' <- withForeignPtr buf' $ if isroot then peek else \_ -> return 0
@@ -459,7 +462,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
        buf' <- mallocForeignPtr @CInt
-       req <- MPI.iscan buf buf' 1 MPI.opSum MPI.commWorld
+       req <- MPI.iscan (buf, 1) (buf', 1) MPI.opSum MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msg' <- withForeignPtr buf' peek
@@ -474,7 +477,7 @@ collectiveNonBlocking = testGroup "collective non-blocking"
        buf <- mallocForeignPtrArray @CInt (if isroot then sz else 0)
        withForeignPtr buf $ \ptr -> pokeArray ptr msgs
        buf' <- mallocForeignPtr @CInt
-       req <- MPI.iscatter buf 1 buf' 1 MPI.rootRank MPI.commWorld
+       req <- MPI.iscatter (buf, 1) (buf', 1) MPI.rootRank MPI.commWorld
        MPI.wait_ req
        touchForeignPtr buf
        msg' <- withForeignPtr buf' peek
@@ -504,7 +507,7 @@ dynamic = testGroup "dynamic"
              when (dst < size) $
              do buf <- mallocForeignPtr @CInt
                 withForeignPtr buf $ \ptr -> poke ptr 42
-                r <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
+                r <- MPI.isend (buf, 1) dst MPI.unitTag MPI.commWorld
                 modifyIORef' sendreqs ((buf, r) :)
        let drainSendQueue =
              do srs <- readIORef sendreqs
@@ -514,7 +517,7 @@ dynamic = testGroup "dynamic"
        let recvMsg st =
              do src <- MPI.getSource st
                 buf <- mallocForeignPtr @CInt
-                MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
+                MPI.recv_ (buf, 1) src MPI.unitTag MPI.commWorld
 
        -- each rank sends to the next
        when (rank == 0) $
@@ -550,7 +553,7 @@ dynamic = testGroup "dynamic"
              when (dst < size) $
              do buf <- mallocForeignPtr @CInt
                 withForeignPtr buf $ \ptr -> poke ptr 42
-                r <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
+                r <- MPI.isend (buf, 1) dst MPI.unitTag MPI.commWorld
                 modifyIORef' sendreqs ((buf, r) :)
        let drainSendQueue =
              do srs <- readIORef sendreqs
@@ -560,7 +563,7 @@ dynamic = testGroup "dynamic"
        let recvMsg st =
              do src <- MPI.getSource st
                 buf <- mallocForeignPtr @CInt
-                MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
+                MPI.recv_ (buf, 1) src MPI.unitTag MPI.commWorld
 
        -- rank r sends to 2*r+1 and 2*r+2
        when (rank == 0) $
@@ -600,14 +603,15 @@ dynamic = testGroup "dynamic"
                   do _ <- forkIO $
                        do buf <- mallocForeignPtr @CInt
                           withForeignPtr buf $ \ptr -> poke ptr 42
-                          req <- MPI.isend buf 1 dst MPI.unitTag MPI.commWorld
+                          req <- MPI.isend (buf, 1) dst MPI.unitTag
+                                 MPI.commWorld
                           whileM_ (not <$> MPI.test_ req) yield
                      return ()
             let checkForMsg = MPI.iprobe MPI.anySource MPI.unitTag MPI.commWorld
             let recvMsg st =
                   do src <- MPI.getSource st
                      buf <- mallocForeignPtr @CInt
-                     MPI.recv_ buf 1 src MPI.unitTag MPI.commWorld
+                     MPI.recv_ (buf, 1) src MPI.unitTag MPI.commWorld
      
             -- rank r sends to 2*r+1 and 2*r+2
             when (rank == 0) $
