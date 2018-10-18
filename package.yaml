@@ -29,6 +29,12 @@ description: |
   high-level API simplifies exchanging arbitrary values that can be
   serialized.
 
+  Note that the automated builds on
+  [Hackage](http://hackage.haskell.org) will currently always fail
+  since no MPI library is present there. However, builds on
+  [Stackage](https://www.stackage.org) should succeed -- if not, there
+  is an error in this package.
+
 extra-source-files:
   - LICENSE
   - README.md
