@@ -48,8 +48,7 @@ ghc-options:
 
 library:
   dependencies:
-    - base <=4.12               # tested with 4.11 and 4.12
-    # - base
+    - base >=4 && <5            # tested with 4.11 and 4.12
     - bytestring
   build-tools:
     - c2hs
