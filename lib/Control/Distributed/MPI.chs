@@ -339,9 +339,7 @@ instance (Storable a, HasDatatype a, Integral i) => Buffer (StablePtr a, i)
 instance Buffer B.ByteString where
   type Elem B.ByteString = CChar
   withPtrLenType bs f =
-    B.unsafeUseAsCString bs $ \ptr -> f ptr (toCount (B.length bs)) datatypeByte
-
--- instance Store a => Buffer a where
+    B.unsafeUseAsCStringLen bs $ \(ptr, len) -> f ptr (toCount len) datatypeByte
 
 
 
