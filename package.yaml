@@ -47,8 +47,7 @@ library:
     - bytestring
   build-tools:
     - c2hs
-  source-dirs:
-    - lib
+  source-dirs: lib
   c-sources:
     - c/src/mpihs.c
   include-dirs:
@@ -59,7 +58,7 @@ library:
 executables:
   example:
     source-dirs: src
-    main: Example.hs
+    main: Main.hs
     dependencies:
       - base
       - mpi-hs
