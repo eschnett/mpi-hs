@@ -56,9 +56,9 @@ library:
     - mpi
 
 executables:
-  mpi-hs:
+  example:
     source-dirs: src
-    main: Main.hs
+    main: Example.hs
     dependencies:
       - base
       - mpi-hs
