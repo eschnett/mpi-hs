@@ -122,7 +122,7 @@ example MPI C code into a file `mpi-example.c`, and run these commands:
 
 ```sh
 cc -I/usr/lib/openmpi/include -c mpi-example.c
-cc mpi-example.o -o mpi-example -L/usr/lib/openmpi/lib -lmpi
+cc -o mpi-example mpi-example.o -L/usr/lib/openmpi/lib -lmpi
 mpirun -np 3 ./mpi-example
 ```
 
