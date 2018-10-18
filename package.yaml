@@ -50,6 +50,8 @@ library:
   dependencies:
     - base >=4 && <5            # tested with 4.11 and 4.12
     - bytestring
+    - monad-loops
+    - store
   build-tools:
     - c2hs
   source-dirs: lib
