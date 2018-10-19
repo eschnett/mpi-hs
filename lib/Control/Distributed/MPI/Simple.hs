@@ -10,6 +10,7 @@ module Control.Distributed.MPI.Simple
   , anySource
   , commRank
   , commSize
+  , rootRank
   , Status(..)
   , Tag(..)
   , anyTag
@@ -55,6 +56,7 @@ import Control.Distributed.MPI
   , anySource
   , commRank
   , commSize
+  , rootRank
   , Tag(..)
   , anyTag
   , unitTag

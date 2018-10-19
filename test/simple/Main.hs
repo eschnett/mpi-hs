@@ -70,6 +70,9 @@ tests :: TestTree
 tests = testGroup "MPI"
   [ rankSize
   , pointToPoint
+  , pointToPointNonBlocking
+  , collective
+  , collectiveNonBlocking
   ]
 
 
@@ -102,4 +105,51 @@ pointToPoint = testGroup "point-to-point"
        (recvmsg == sendmsg &&
         MPI.msgRank status == recvrank &&
         MPI.msgTag status == MPI.unitTag) @? ""
+  ]
+
+
+
+pointToPointNonBlocking :: TestTree
+pointToPointNonBlocking = testGroup "point-to-point non-blocking"
+  [ testCase "send and recv" $
+    do rank <- MPI.commRank MPI.commWorld
+       size <- MPI.commSize MPI.commWorld
+       let sendmsg :: String = "Hello, World!"
+       let sendrank = (rank + 1) `mod` size
+       sendreq <- MPI.isend sendmsg sendrank MPI.unitTag MPI.commWorld
+       let recvrank = (rank - 1) `mod` size
+       recvreq <- MPI.irecv recvrank MPI.unitTag MPI.commWorld
+       (sendstatus, ()) <- MPI.wait sendreq
+       (recvstatus, recvmsg :: String) <- MPI.wait recvreq
+       (recvmsg == sendmsg &&
+        MPI.msgRank sendstatus == sendrank &&
+        MPI.msgTag sendstatus == MPI.unitTag &&
+        MPI.msgRank recvstatus == recvrank &&
+        MPI.msgTag recvstatus == MPI.unitTag) @? ""
+  ]
+
+
+
+collective :: TestTree
+collective = testGroup "collective"
+  [ testCase "barrier" $
+    do MPI.barrier MPI.commWorld
+  , testCase "bcast" $
+    do rank <- MPI.commRank MPI.commWorld
+       let sendmsg :: String = "Hello, World!"
+       recvmsg :: String <-
+         if rank == MPI.rootRank
+         then do MPI.bcastSend sendmsg MPI.rootRank MPI.commWorld
+                 return sendmsg
+         else do MPI.bcastRecv MPI.rootRank MPI.commWorld
+       recvmsg == sendmsg @? ""
+  ]
+
+
+
+collectiveNonBlocking :: TestTree
+collectiveNonBlocking = testGroup "collective non-blocking"
+  [ testCase "barrier" $
+    do req <- MPI.ibarrier MPI.commWorld
+       MPI.wait_ req
   ]
