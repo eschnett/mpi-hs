@@ -1,36 +1,73 @@
 {-# LANGUAGE TypeApplications #-}
 
+-- | Module: Control.Distributed.MPI.Simple
+-- Description: Simplified MPI bindings with automatic serialization
+-- Copyright: (C) 2018 Erik Schnetter
+-- License: Apache-2.0
+-- Maintainer: Erik Schnetter <schnetter@gmail.com>
+-- Stability: experimental
+-- Portability: Requires an externally installed MPI library
+
 module Control.Distributed.MPI.Simple
-  ( MPIException(..)
-  , mainMPI
+  ( -- * Types, and associated functions constants
+    MPIException(..)
+
+    -- ** Communicators
   , Comm(..)
   , commSelf
   , commWorld
+
+    -- ** Message sizes
+  , Count(..)
+  , fromCount
+  , toCount
+
+    -- ** Process ranks
   , Rank(..)
   , anySource
   , commRank
   , commSize
   , rootRank
+
+    -- ** Message status
   , Status(..)
+
+    -- ** Message tags
   , Tag(..)
   , anyTag
+  , fromTag
+  , toTag
   , unitTag
-  , Request(..)
+
+  , Request
+
+    -- * Functions
+
+    -- ** Initialization and shutdown
   , abort
-  , irecv
-  , isend
+  , mainMPI
+
+    -- ** Point-to-point (blocking)
   , recv
   , recv_
   , send
   , sendrecv
   , sendrecv_
+
+    -- ** Point-to-point (non-blocking)
+  , irecv
+  , isend
   , test
   , test_
   , wait
   , wait_
+
+    -- ** Collective (blocking)
   , barrier
   , bcastRecv
   , bcastSend
+
+    -- ** Collective (non-blocking)
   , ibarrier
   ) where
 
@@ -52,6 +89,9 @@ import Control.Distributed.MPI
   ( Comm(..)
   , commSelf
   , commWorld
+  , Count(..)
+  , fromCount
+  , toCount
   , Rank(..)
   , anySource
   , commRank
@@ -59,6 +99,8 @@ import Control.Distributed.MPI
   , rootRank
   , Tag(..)
   , anyTag
+  , fromTag
+  , toTag
   , unitTag
   , abort
   , barrier
@@ -66,9 +108,15 @@ import Control.Distributed.MPI
 
 
 
+-- | Exception type indicating an error in a call to MPI
 newtype MPIException = MPIException String
   deriving (Eq, Ord, Read, Show, Typeable)
 instance Exception MPIException
+
+mpiAssert :: Bool -> String -> IO ()
+mpiAssert cond msg =
+  do when (not cond) $ throw (MPIException msg)
+     return ()
 
 
 
@@ -80,8 +128,7 @@ initMPI =
      if isInit
        then return DidNotInit
        else do ts <- MPI.initThread MPI.ThreadMultiple
-               when (ts < MPI.ThreadMultiple) $
-                 throw $ MPIException
+               mpiAssert (ts >= MPI.ThreadMultiple)
                  ("MPI.init: Insufficient thread support: requiring " ++
                   show MPI.ThreadMultiple ++
                   ", but MPI library provided only " ++ show ts)
@@ -95,13 +142,20 @@ finalizeMPI DidInit =
        else do MPI.finalize
 finalizeMPI DidNotInit = return ()
 
-mainMPI :: IO () -> IO ()
-mainMPI task = bracket initMPI finalizeMPI (\_ -> task)
+-- | Convenience function to initialize and finalize MPI. This
+-- initializes MPI with 'ThreadMultiple' thread support.
+mainMPI :: IO () -- ^ action to run with MPI, typically the whole program
+        -> IO ()
+mainMPI action = bracket initMPI finalizeMPI (\_ -> action)
 
 
 
+-- | A communication request, usually created by a non-blocking
+-- communication function.
 newtype Request a = Request (MVar (Status, a))
 
+-- | The status of a finished communication, indicating rank and tag
+-- of the other communication end point.
 data Status = Status { msgRank :: !Rank
                      , msgTag :: !Tag
                      }
@@ -109,6 +163,7 @@ data Status = Status { msgRank :: !Rank
 
 
 
+-- | Receive an object.
 recv :: Store a
      => Rank                    -- ^ Source rank
      -> Tag                     -- ^ Source tag
@@ -128,6 +183,7 @@ recv recvrank recvtag comm =
      whileM_ (not <$> MPI.test_ req) yield
      return (Status source tag, decodeEx buffer)
 
+-- | Receive an object without returning a status.
 recv_ :: Store a
       => Rank                   -- ^ Source rank
       -> Tag                    -- ^ Source tag
@@ -136,6 +192,7 @@ recv_ :: Store a
 recv_ recvrank recvtag comm =
   snd <$> recv recvrank recvtag comm
 
+-- | Send an object.
 send :: Store a
      => a                     -- ^ Object to send
      -> Rank                  -- ^ Destination rank
@@ -146,6 +203,7 @@ send sendobj sendrank sendtag comm =
   do let sendbuf = encode sendobj
      MPI.send sendbuf sendrank sendtag comm
 
+-- | Send and receive objects simultaneously.
 sendrecv :: (Store a, Store b)
          => a                   -- ^ Object to send
          -> Rank                -- ^ Destination rank
@@ -160,6 +218,8 @@ sendrecv sendobj sendrank sendtag recvrank recvtag comm =
      wait_ sendreq
      wait recvreq
 
+-- | Send and receive objects simultaneously, without returning a
+-- status for the received message.
 sendrecv_ :: (Store a, Store b)
           => a                  -- ^ Object to send
           -> Rank               -- ^ Destination rank
@@ -171,6 +231,8 @@ sendrecv_ :: (Store a, Store b)
 sendrecv_ sendobj sendrank sendtag recvrank recvtag comm =
   snd <$> sendrecv sendobj sendrank sendtag recvrank recvtag comm
 
+-- | Begin to receive an object. Call `test` or `wait` to finish the
+-- communication, and to obtain the received object.
 irecv :: Store a
       => Rank                   -- ^ Source rank
       -> Tag                    -- ^ Source tag
@@ -193,6 +255,8 @@ irecv recvrank recvtag comm =
           putMVar result (Status source tag, decodeEx buffer)
      return (Request result)
 
+-- | Begin to send an object. Call 'test' or 'wait' to finish the
+-- communication.
 isend :: Store a
       => a                     -- ^ Object to send
       -> Rank                  -- ^ Destination rank
@@ -208,33 +272,44 @@ isend sendobj sendrank sendtag comm =
           putMVar result (Status sendrank sendtag, ())
      return (Request result)
 
+-- | Check whether a communication has finished, and return the
+-- communication result if so.
 test :: Request a               -- ^ Communication request
      -> IO (Maybe (Status, a))  -- ^ 'Just' communication result, if
                                 -- communication has finished, else 'Nothing'
 test (Request result) = tryTakeMVar result
 
+-- | Check whether a communication has finished, and return the
+-- communication result if so, without returning a message status.
 test_ :: Request a       -- ^ Communication request
       -> IO (Maybe a) -- ^ 'Just' communication result, if
                       -- communication has finished, else 'Nothing'
 test_ req = fmap snd <$> test req
 
+-- | Wait for a communication to finish and return the communication
+-- result.
 wait :: Request a               -- ^ Communication request
      -> IO (Status, a)          -- ^ Message status and communication result
 wait (Request result) = takeMVar result
 
+-- | Wait for a communication to finish and return the communication
+-- result, without returning a message status.
 wait_ :: Request a              -- ^ Communication request
       -> IO a                   -- ^ Communication result
 wait_ req = snd <$> wait req
 
 
 
+-- | Broadcast a message from one process (the "root") to all other
+-- processes in the communicator. Call this function on all non-root
+-- processes. Call 'bcastSend' instead on the root process.
 bcastRecv :: Store a
           => Rank
           -> Comm
           -> IO a
 bcastRecv root comm =
   do rank <- MPI.commRank comm
-     assert (rank /= root) $ return ()
+     mpiAssert (rank /= root) "bcastRecv: expected rank /= root"
      buf <- mallocForeignPtr @CLong
      MPI.bcast (buf, 1::Int) root comm
      len <- withForeignPtr buf peek
@@ -243,6 +318,9 @@ bcastRecv root comm =
      MPI.bcast recvbuf root comm               
      return (decodeEx recvbuf)
 
+-- | Broadcast a message from one process (the "root") to all other
+-- processes in the communicator. Call this function on the root
+-- process. Call 'bcastRecv' instead on all non-root processes.
 bcastSend :: Store a
           => a
           -> Rank
@@ -250,13 +328,15 @@ bcastSend :: Store a
           -> IO ()
 bcastSend sendobj root comm =
   do rank <- MPI.commRank comm
-     assert (rank == root) $ return ()
+     mpiAssert (rank == root) "bcastSend: expected rank == root"
      let sendbuf = encode sendobj
      buf <- mallocForeignPtr @CLong
      withForeignPtr buf $ \ptr -> poke ptr (fromIntegral (B.length sendbuf))
      MPI.bcast (buf, 1::Int) root comm
      MPI.bcast sendbuf root comm
 
+-- | Begin a barrier. Call 'test' or 'wait' to finish the
+-- communication.
 ibarrier :: Comm
          -> IO (Request ())
 ibarrier comm =

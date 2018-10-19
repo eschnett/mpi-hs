@@ -83,7 +83,7 @@
 --   functions could be exposed as well when needed.)
 
 module Control.Distributed.MPI
-  ( -- * Types, and associated functions constants
+  ( -- * Types, and associated functions and constants
 
     -- ** Communication buffers
     Buffer(..)
