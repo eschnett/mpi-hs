@@ -20,5 +20,5 @@ jobs:
             - ~/.stack
       - run: |
           stack --no-terminal --system-ghc build --haddock --test --no-run-tests &&
-          mpirun --allow-run-as-root --mca btl self,vader -np 3 stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-hs-test-suite/mpi-hs-test-suite &&
+          mpirun --allow-run-as-root --mca btl self,vader -np 3 stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-tests/mpi-tests &&
           stack --no-terminal --system-ghc install
