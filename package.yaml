@@ -88,8 +88,8 @@ benchmarks:
       - -with-rtsopts=-N
 
 tests:
-  mpi-hs-test-suite:
-    source-dirs: test
+  mpi-tests:
+    source-dirs: test/mpi
     main: Main.hs
     dependencies:
       - base
