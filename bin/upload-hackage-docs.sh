@@ -46,8 +46,8 @@ trap 'rm -r "$dir"' EXIT
 # This command was actually used by stack:
 #   /Users/eschnett/.stack/setup-exe-cache/x86_64-osx/Cabal-simple_mPHDZzAJ_2.2.0.1_ghc-8.4.3 --builddir=.stack-work/dist/x86_64-osx/Cabal-2.2.0.1 haddock --html --hoogle --html-location=../$pkg-$version/ --haddock-option=--hyperlinked-source
 
-# Combining the two above:
-/Users/eschnett/.stack/setup-exe-cache/x86_64-osx/Cabal-simple_mPHDZzAJ_2.2.0.1_ghc-8.4.3 --builddir=.stack-work/dist/x86_64-osx/Cabal-2.2.0.1 haddock --html --hoogle --haddock-option=--hyperlinked-source --html-location='/package/$pkg-$version/docs' --contents-location='/package/$pkg-$version'
+# Combining the two above, and updating version numbers:
+/Users/eschnett/.stack/setup-exe-cache/x86_64-osx/Cabal-simple_mPHDZzAJ_2.2.0.1_ghc-8.4.4 --builddir=.stack-work/dist/x86_64-osx/Cabal-2.2.0.1 haddock --html --hoogle --haddock-option=--hyperlinked-source --html-location='/package/$pkg-$version/docs' --contents-location='/package/$pkg-$version'
 
 # cp -R "dist/doc/html/$pkg/" "$dir/$pkg-$ver-docs"
 cp -R "./.stack-work/dist/x86_64-osx/Cabal-2.2.0.1/doc/html/$pkg/" "$dir/$pkg-$ver-docs"

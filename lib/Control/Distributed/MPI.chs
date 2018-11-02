@@ -10,6 +10,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
+
 {-# OPTIONS_GHC -Wno-type-defaults #-}
 
 #include <mpi.h>
@@ -122,7 +123,6 @@ module Control.Distributed.MPI
   , datatypeUnsignedLong
   , datatypeUnsignedShort
   , HasDatatype(..)
-  -- , datatypeOf
 
     -- ** Reduction operations
   , Op(..)
@@ -250,11 +250,13 @@ import Data.IORef
 import Data.Ix
 import qualified Data.Monoid as Monoid
 import qualified Data.Semigroup as Semigroup
+import qualified Data.Store as Store
 import Data.Version
 import Foreign
 import Foreign.C.String
 import Foreign.C.Types
 import GHC.Arr (indexError)
+import GHC.Generics hiding (Datatype, from, to)
 import System.IO.Unsafe (unsafePerformIO)
 
 default (Int)
@@ -355,7 +357,9 @@ deriving instance Ord Comm
 deriving instance Show Comm
 
 -- | The result of comparing two MPI communicator (see 'commCompare').
-{#enum ComparisonResult {} deriving (Eq, Ord, Read, Show)#}
+{#enum ComparisonResult {} deriving (Eq, Ord, Read, Show, Generic)#}
+
+instance Store.Store ComparisonResult
 
 
 
@@ -363,13 +367,15 @@ deriving instance Show Comm
 -- and 'fromCount' to convert between 'Count' and other integral
 -- types.
 newtype Count = Count CInt
-  deriving (Eq, Ord, Enum, Integral, Num, Real, Storable)
+  deriving (Eq, Ord, Enum, Generic, Integral, Num, Real, Storable)
 
 instance Read Count where
   readsPrec p = map (\(c, s) -> (Count c, s)) . readsPrec p
 
 instance Show Count where
   showsPrec p (Count c) = showsPrec p c
+
+instance Store.Store Count
 
 -- | Convert an integer to a count.
 toCount :: Integral i => i -> Count
@@ -419,8 +425,7 @@ deriving instance Show Op
 -- same rank might correspond to different processes in different
 -- communicators.
 newtype Rank = Rank CInt
-  deriving (Eq, Ord, Enum, Integral, Num, Real, Storable)
-
+  deriving (Eq, Ord, Enum, Integral, Num, Real, Storable, Generic)
 instance Read Rank where
   readsPrec p = map (\(r, s) -> (Rank r, s)) . readsPrec p
 
@@ -434,6 +439,8 @@ instance Ix Rank where
     | inRange b i = fromIntegral (r - rmin)
     | otherwise   = indexError b i "MPI.Rank"
   inRange (Rank rmin, Rank rmax) (Rank r) = rmin <= r && r <= rmax
+
+instance Store.Store Rank
 
 -- | Convert an enum to a rank.
 toRank :: Enum e => e -> Rank
@@ -501,7 +508,9 @@ getTag (Status fst) =
 -- 'fromTag' to convert between 'Count' and other enum types.
 -- 'unitTag' defines a standard tag that can be used as default.
 newtype Tag = Tag CInt
-  deriving (Eq, Ord, Read, Show, Enum, Num, Storable)
+  deriving (Eq, Ord, Read, Show, Generic, Enum, Num, Storable)
+
+instance Store.Store Tag
 
 -- | Convert an enum to a tag.
 toTag :: Enum e => e -> Tag
@@ -532,7 +541,9 @@ unitTag = toTag ()
 -- * 'ThreadMultiple' (@MPI_THREAD_MULTIPLE@): The application is
 --   multi-threaded, and different threads might call MPI at the same
 --   time
-{#enum ThreadSupport {} deriving (Eq, Ord, Read, Show)#}
+{#enum ThreadSupport {} deriving (Eq, Ord, Read, Show, Generic)#}
+
+instance Store.Store ThreadSupport
 
 -- | When MPI is initialized with this library, then it will remember
 -- the provided level of thread support. (This might be less than the
@@ -629,87 +640,6 @@ instance HasDatatype CUChar where getDatatype = datatypeUnsignedChar
 instance HasDatatype CUInt where getDatatype = datatypeUnsigned
 instance HasDatatype CULong where getDatatype = datatypeUnsignedLong
 instance HasDatatype CUShort where getDatatype = datatypeUnsignedShort
-
--- instance Coercible Int CChar => HasDatatype Int where
---   datatype = datatype @CChar
--- instance Coercible Int CShort => HasDatatype Int where
---   datatype = datatype @CShort
--- instance Coercible Int CInt => HasDatatype Int where
---   datatype = datatype @CInt
--- instance Coercible Int CLong => HasDatatype Int where
---   datatype = datatype @CLong
--- instance Coercible Int CLLong => HasDatatype Int where
---   datatype = datatype @CLLong
-
--- instance HasDatatype Int where
---   datatype = if | coercible @Int @CChar -> datatype @CChar
---                 | coercible @Int @CShort -> datatype @CShort
---                 | coercible @Int @CInt -> datatype @CInt
---                 | coercible @Int @CLong -> datatype @CLong
---                 | coercible @Int @CLLong -> datatype @CLLong
--- instance HasDatatype Int8 where
---   datatype = if | coercible @Int @CChar -> datatype @CChar
---                 | coercible @Int @CShort -> datatype @CShort
---                 | coercible @Int @CInt -> datatype @CInt
---                 | coercible @Int @CLong -> datatype @CLong
---                 | coercible @Int @CLLong -> datatype @CLLong
--- instance HasDatatype Int16 where
---   datatype = if | coercible @Int @CChar -> datatype @CChar
---                 | coercible @Int @CShort -> datatype @CShort
---                 | coercible @Int @CInt -> datatype @CInt
---                 | coercible @Int @CLong -> datatype @CLong
---                 | coercible @Int @CLLong -> datatype @CLLong
--- instance HasDatatype Int32 where
---   datatype = if | coercible @Int @CChar -> datatype @CChar
---                 | coercible @Int @CShort -> datatype @CShort
---                 | coercible @Int @CInt -> datatype @CInt
---                 | coercible @Int @CLong -> datatype @CLong
---                 | coercible @Int @CLLong -> datatype @CLLong
--- instance HasDatatype Int64 where
---   datatype = if | coercible @Int @CChar -> datatype @CChar
---                 | coercible @Int @CShort -> datatype @CShort
---                 | coercible @Int @CInt -> datatype @CInt
---                 | coercible @Int @CLong -> datatype @CLong
---                 | coercible @Int @CLLong -> datatype @CLLong
--- instance HasDatatype Word where
---   datatype = if | coercible @Int @CUChar -> datatype @CUChar
---                 | coercible @Int @CUShort -> datatype @CUShort
---                 | coercible @Int @CUInt -> datatype @CUInt
---                 | coercible @Int @CULong -> datatype @CULong
---                 -- | coercible @Int @CULLong -> datatype @CULLong
--- instance HasDatatype Word8 where
---   datatype = if | coercible @Int @CUChar -> datatype @CUChar
---                 | coercible @Int @CUShort -> datatype @CUShort
---                 | coercible @Int @CUInt -> datatype @CUInt
---                 | coercible @Int @CULong -> datatype @CULong
---                 -- | coercible @Int @CULLong -> datatype @CULLong
--- instance HasDatatype Word16 where
---   datatype = if | coercible @Int @CUChar -> datatype @CUChar
---                 | coercible @Int @CUShort -> datatype @CUShort
---                 | coercible @Int @CUInt -> datatype @CUInt
---                 | coercible @Int @CULong -> datatype @CULong
---                 -- | coercible @Int @CULLong -> datatype @CULLong
--- instance HasDatatype Word32 where
---   datatype = if | coercible @Int @CUChar -> datatype @CUChar
---                 | coercible @Int @CUShort -> datatype @CUShort
---                 | coercible @Int @CUInt -> datatype @CUInt
---                 | coercible @Int @CULong -> datatype @CULong
---                 -- | coercible @Int @CULLong -> datatype @CULLong
--- instance HasDatatype Word64 where
---   datatype = if | coercible @Int @CUChar -> datatype @CUChar
---                 | coercible @Int @CUShort -> datatype @CUShort
---                 | coercible @Int @CUInt -> datatype @CUInt
---                 | coercible @Int @CULong -> datatype @CULong
---                 -- | coercible @Int @CULLong -> datatype @CULLong
--- instance HasDatatype Float where
---   datatype = if | coercible @Float @CFloat -> datatype @CFloat
---                 | coercible @Float @CDouble -> datatype @CDouble
--- instance HasDatatype Double where
---   datatype = if | coercible @Double @CFloat -> datatype @CFloat
---                 | coercible @Double @CDouble -> datatype @CDouble
-
--- datatypeOf :: forall a p. HasDatatype a => p a -> Datatype
--- datatypeOf _ = datatype @a
 
 
 

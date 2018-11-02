@@ -3,7 +3,7 @@
 import System.IO
 import System.Exit
 
-import qualified Control.Distributed.MPI.Simple as MPI
+import qualified Control.Distributed.MPI.Store as MPI
 
 default (Int)
 

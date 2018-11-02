@@ -145,3 +145,45 @@ needed, then these need to be added to the `stack.yaml` configuration
 file (for include and library paths; see `extra-include-dirs` and
 `extra-lib-dirs` there) or the `package.yaml` configuration file (for
 additional libraries; see `extra-libraries` there).
+
+
+
+## Examples and Tests
+
+### Running the example
+
+To run the example provided in `src/Main.hs`:
+
+```
+stack build
+mpirun -np 3 stack exec example && echo SUCCESS || echo FAILURE
+```
+
+With OpenMPI, and when running on a single node (e.g. on a laptop or a
+workstation), these additional `mpirun` options might be useful:
+
+```
+mpirun -np 3 --mca btl self,vader --oversubscribe stack exec example && echo SUCCESS || echo FAILURE
+```
+
+The options `--mca btl self,vader` enable the shared memory byte
+transfer layer (called "vader"), and also disable any network
+communication.
+
+The option `--oversubscribe` lets you run as many MPI processes on the
+local node as you want, without being limited by the physical number
+of cores. This is convenient for testing.
+
+Other MPI implementations should have equivalent (but differently
+named) options.
+
+### Running the tests
+
+There are three test cases provided in `tests`:
+
+```
+stack build --test --no-run-tests
+mpirun -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test/mpi-test && echo SUCCESS || echo FAILURE
+mpirun -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-packing/mpi-test-packing && echo SUCCESS || echo FAILURE
+mpirun -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-store/mpi-test-store && echo SUCCESS || echo FAILURE
+```

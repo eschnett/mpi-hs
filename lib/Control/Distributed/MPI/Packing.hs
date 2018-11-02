@@ -1,15 +1,17 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
--- | Module: Control.Distributed.MPI.Simple
+-- | Module: Control.Distributed.MPI.Packing
 -- Description: Simplified MPI bindings with automatic serialization
+--              based on GHC.Packing
 -- Copyright: (C) 2018 Erik Schnetter
 -- License: Apache-2.0
 -- Maintainer: Erik Schnetter <schnetter@gmail.com>
 -- Stability: experimental
 -- Portability: Requires an externally installed MPI library
 
-module Control.Distributed.MPI.Simple
-  ( -- * Types, and associated functions constants
+module Control.Distributed.MPI.Packing
+  ( -- * Types, and associated functions and constants
     MPIException(..)
 
     -- ** Communicators
@@ -27,7 +29,9 @@ module Control.Distributed.MPI.Simple
   , anySource
   , commRank
   , commSize
+  , fromRank
   , rootRank
+  , toRank
 
     -- ** Message status
   , Status(..)
@@ -77,12 +81,14 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Control.Monad.Loops
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
-import Data.Store hiding (peek, poke)
+import qualified Data.Binary as Binary
 import Data.Typeable
 import Foreign
 import Foreign.C.Types
+import qualified GHC.Packing as Packing
 
 import qualified Control.Distributed.MPI as MPI
 import Control.Distributed.MPI
@@ -96,7 +102,9 @@ import Control.Distributed.MPI
   , anySource
   , commRank
   , commSize
+  , fromRank
   , rootRank
+  , toRank
   , Tag(..)
   , anyTag
   , fromTag
@@ -105,6 +113,27 @@ import Control.Distributed.MPI
   , abort
   , barrier
   )
+
+
+
+-- Serialization, based on GHC.Packing
+type CanSerialize a = Typeable a
+serialize :: CanSerialize a => a -> IO B.ByteString
+serialize = fmap (BL.toStrict . Binary.encode) . Packing.trySerialize
+deserialize :: CanSerialize a => B.ByteString -> IO a
+deserialize = Packing.deserialize . Binary.decode . BL.fromStrict
+
+
+
+-- | Run the supplied Maybe computation repeatedly while it returns
+-- Nothing. If it returns a value, then returns that value.
+whileNothing :: Monad m => m (Maybe a) -> m () -> m a
+whileNothing cond loop = go
+  where go = do mx <- cond
+                case mx of
+                  Nothing -> do loop
+                                go
+                  Just x -> return x
 
 
 
@@ -164,15 +193,13 @@ data Status = Status { msgRank :: !Rank
 
 
 -- | Receive an object.
-recv :: Store a
+recv :: CanSerialize a
      => Rank                    -- ^ Source rank
      -> Tag                     -- ^ Source tag
      -> Comm                    -- ^ Communicator
      -> IO (Status, a)          -- ^ Message status and received object
 recv recvrank recvtag comm =
-  do status <- untilJust $
-       do yield
-          MPI.iprobe recvrank recvtag comm
+  do status <- whileNothing (MPI.iprobe recvrank recvtag comm) yield
      source <- MPI.getSource status
      tag <- MPI.getTag status
      count <- MPI.getCount status MPI.datatypeByte
@@ -181,10 +208,11 @@ recv recvrank recvtag comm =
      buffer <- B.unsafePackMallocCStringLen (ptr, len)
      req <- MPI.irecv buffer source tag comm
      whileM_ (not <$> MPI.test_ req) yield
-     return (Status source tag, decodeEx buffer)
+     recvobj <- deserialize buffer
+     return (Status source tag, recvobj)
 
 -- | Receive an object without returning a status.
-recv_ :: Store a
+recv_ :: CanSerialize a
       => Rank                   -- ^ Source rank
       -> Tag                    -- ^ Source tag
       -> Comm                   -- ^ Communicator
@@ -193,18 +221,19 @@ recv_ recvrank recvtag comm =
   snd <$> recv recvrank recvtag comm
 
 -- | Send an object.
-send :: Store a
+send :: CanSerialize a
      => a                     -- ^ Object to send
      -> Rank                  -- ^ Destination rank
      -> Tag                   -- ^ Message tag
      -> Comm                  -- ^ Communicator
      -> IO ()
 send sendobj sendrank sendtag comm =
-  do let sendbuf = encode sendobj
-     MPI.send sendbuf sendrank sendtag comm
+  do sendbuf <- serialize sendobj
+     req <- MPI.isend sendbuf sendrank sendtag comm
+     whileM_ (not <$> MPI.test_ req) yield
 
 -- | Send and receive objects simultaneously.
-sendrecv :: (Store a, Store b)
+sendrecv :: (CanSerialize a, CanSerialize b)
          => a                   -- ^ Object to send
          -> Rank                -- ^ Destination rank
          -> Tag                 -- ^ Send message tag
@@ -213,14 +242,13 @@ sendrecv :: (Store a, Store b)
          -> Comm                -- ^ Communicator
          -> IO (Status, b)      -- ^ Message status and received object
 sendrecv sendobj sendrank sendtag recvrank recvtag comm =
-  do sendreq <- isend sendobj sendrank sendtag comm
-     recvreq <- irecv recvrank recvtag comm
-     wait_ sendreq
+  do recvreq <- irecv recvrank recvtag comm
+     send sendobj sendrank sendtag comm
      wait recvreq
 
 -- | Send and receive objects simultaneously, without returning a
 -- status for the received message.
-sendrecv_ :: (Store a, Store b)
+sendrecv_ :: (CanSerialize a, CanSerialize b)
           => a                  -- ^ Object to send
           -> Rank               -- ^ Destination rank
           -> Tag                -- ^ Send message tag
@@ -233,7 +261,7 @@ sendrecv_ sendobj sendrank sendtag recvrank recvtag comm =
 
 -- | Begin to receive an object. Call `test` or `wait` to finish the
 -- communication, and to obtain the received object.
-irecv :: Store a
+irecv :: CanSerialize a
       => Rank                   -- ^ Source rank
       -> Tag                    -- ^ Source tag
       -> Comm                   -- ^ Communicator
@@ -241,35 +269,22 @@ irecv :: Store a
 irecv recvrank recvtag comm =
   do result <- newEmptyMVar
      _ <- forkIO $
-       do status <- untilJust $
-            do yield
-               MPI.iprobe recvrank recvtag comm
-          source <- MPI.getSource status
-          tag <- MPI.getTag status
-          count <- MPI.getCount status MPI.datatypeByte
-          let len = MPI.fromCount count
-          ptr <- mallocBytes len
-          buffer <- B.unsafePackMallocCStringLen (ptr, len)
-          req <- MPI.irecv buffer source tag comm
-          whileM_ (not <$> MPI.test_ req) yield
-          putMVar result (Status source tag, decodeEx buffer)
+       do res <- recv recvrank recvtag comm
+          putMVar result res
      return (Request result)
 
 -- | Begin to send an object. Call 'test' or 'wait' to finish the
 -- communication.
-isend :: Store a
+isend :: CanSerialize a
       => a                     -- ^ Object to send
       -> Rank                  -- ^ Destination rank
       -> Tag                   -- ^ Message tag
       -> Comm                  -- ^ Communicator
       -> IO (Request ())       -- ^ Communication request
 isend sendobj sendrank sendtag comm =
-  do let sendbuf = encode sendobj
-     req <- MPI.isend sendbuf sendrank sendtag comm
-     result <- newEmptyMVar
-     _ <- forkIO $ B.unsafeUseAsCString sendbuf $ \_ ->
-       do whileM_ (not <$> MPI.test_ req) yield
-          putMVar result (Status sendrank sendtag, ())
+  do result <- newEmptyMVar
+     _ <- forkIO $ do send sendobj sendrank sendtag comm
+                      putMVar result (Status sendrank sendtag, ())
      return (Request result)
 
 -- | Check whether a communication has finished, and return the
@@ -282,8 +297,8 @@ test (Request result) = tryTakeMVar result
 -- | Check whether a communication has finished, and return the
 -- communication result if so, without returning a message status.
 test_ :: Request a       -- ^ Communication request
-      -> IO (Maybe a) -- ^ 'Just' communication result, if
-                      -- communication has finished, else 'Nothing'
+      -> IO (Maybe a)    -- ^ 'Just' communication result, if
+                         -- communication has finished, else 'Nothing'
 test_ req = fmap snd <$> test req
 
 -- | Wait for a communication to finish and return the communication
@@ -303,25 +318,26 @@ wait_ req = snd <$> wait req
 -- | Broadcast a message from one process (the "root") to all other
 -- processes in the communicator. Call this function on all non-root
 -- processes. Call 'bcastSend' instead on the root process.
-bcastRecv :: Store a
+bcastRecv :: CanSerialize a
           => Rank
           -> Comm
           -> IO a
 bcastRecv root comm =
   do rank <- MPI.commRank comm
      mpiAssert (rank /= root) "bcastRecv: expected rank /= root"
-     buf <- mallocForeignPtr @CLong
-     MPI.bcast (buf, 1::Int) root comm
-     len <- withForeignPtr buf peek
+     lenbuf <- mallocForeignPtr @CLong
+     MPI.bcast (lenbuf, 1::Int) root comm
+     len <- withForeignPtr lenbuf peek
      ptr <- mallocBytes (fromIntegral len)
      recvbuf <- B.unsafePackMallocCStringLen (ptr, fromIntegral len)
      MPI.bcast recvbuf root comm               
-     return (decodeEx recvbuf)
+     recvobj <- deserialize recvbuf
+     return recvobj
 
 -- | Broadcast a message from one process (the "root") to all other
 -- processes in the communicator. Call this function on the root
 -- process. Call 'bcastRecv' instead on all non-root processes.
-bcastSend :: Store a
+bcastSend :: CanSerialize a
           => a
           -> Rank
           -> Comm
@@ -329,10 +345,10 @@ bcastSend :: Store a
 bcastSend sendobj root comm =
   do rank <- MPI.commRank comm
      mpiAssert (rank == root) "bcastSend: expected rank == root"
-     let sendbuf = encode sendobj
-     buf <- mallocForeignPtr @CLong
-     withForeignPtr buf $ \ptr -> poke ptr (fromIntegral (B.length sendbuf))
-     MPI.bcast (buf, 1::Int) root comm
+     sendbuf <- serialize sendobj
+     lenbuf <- mallocForeignPtr @CLong
+     withForeignPtr lenbuf $ \ptr -> poke ptr (fromIntegral (B.length sendbuf))
+     MPI.bcast (lenbuf, 1::Int) root comm
      MPI.bcast sendbuf root comm
 
 -- | Begin a barrier. Call 'test' or 'wait' to finish the

@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.3.1.0'
+version: '0.4.0.0'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
@@ -49,8 +49,10 @@ ghc-options:
 library:
   dependencies:
     - base >=4 && <5            # tested with 4.11 and 4.12
+    - binary
     - bytestring
     - monad-loops
+    - packman
     - store
   build-tools:
     - c2hs
@@ -88,8 +90,8 @@ benchmarks:
       - -with-rtsopts=-N
 
 tests:
-  mpi-tests:
-    source-dirs: test/mpi
+  mpi-test:
+    source-dirs: tests/mpi
     main: Main.hs
     dependencies:
       - base
@@ -103,12 +105,25 @@ tests:
       - -rtsopts
       - -threaded
       - -with-rtsopts=-N
-  mpi-simple-tests:
-    source-dirs: test/simple
+  mpi-test-packing:
+    source-dirs: tests/packing
     main: Main.hs
     dependencies:
       - base
-      - monad-loops
+      - mpi-hs
+      # - tasty
+      # - tasty-hunit
+      # - tasty-hspec
+      # - unix
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+  mpi-test-store:
+    source-dirs: tests/store
+    main: Main.hs
+    dependencies:
+      - base
       - mpi-hs
       # - tasty
       # - tasty-hunit
