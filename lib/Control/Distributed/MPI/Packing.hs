@@ -73,6 +73,8 @@ module Control.Distributed.MPI.Packing
 
     -- ** Collective (non-blocking)
   , ibarrier
+  , ibcastRecv
+  , ibcastSend
   ) where
 
 import Prelude hiding (init)
@@ -233,7 +235,7 @@ send sendobj sendrank sendtag comm =
      -- too early
      B.unsafeUseAsCStringLen sendbuf $ \_ ->
        do req <- MPI.isend sendbuf sendrank sendtag comm
-     whileM_ (not <$> MPI.test_ req) yield
+          whileM_ (not <$> MPI.test_ req) yield
 
 -- | Send and receive objects simultaneously.
 sendrecv :: (CanSerialize a, CanSerialize b)
@@ -353,8 +355,33 @@ bcastSend sendobj root comm =
      sendbuf <- serialize sendobj
      lenbuf <- mallocForeignPtr @CLong
      withForeignPtr lenbuf $ \ptr -> poke ptr (fromIntegral (B.length sendbuf))
-     MPI.bcast (lenbuf, 1::Int) root comm
-     MPI.bcast sendbuf root comm
+     lenreq <- MPI.ibcast (lenbuf, 1::Int) root comm
+     whileM_ (not <$> MPI.test_ lenreq) yield
+     req <- MPI.ibcast sendbuf root comm
+     whileM_ (not <$> MPI.test_ req) yield
+
+ibcastRecv :: CanSerialize a
+           => Rank
+           -> Comm
+           -> IO (Request a)
+ibcastRecv root comm =
+  do result <- newEmptyMVar
+     _ <- forkIO $
+       do recvobj <- bcastRecv root comm
+          putMVar result (Status root MPI.anyTag, recvobj)
+     return (Request result)
+
+ibcastSend :: CanSerialize a
+           => a
+           -> Rank
+           -> Comm
+           -> IO (Request ())
+ibcastSend sendobj root comm =
+  do result <- newEmptyMVar
+     _ <- forkIO $
+       do bcastSend sendobj root comm
+          putMVar result (Status root MPI.anyTag, ())
+     return (Request result)
 
 -- | Begin a barrier. Call 'test' or 'wait' to finish the
 -- communication.

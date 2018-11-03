@@ -152,4 +152,15 @@ collectiveNonBlocking = testGroup "collective non-blocking"
   [ testCase "barrier" $
     do req <- MPI.ibarrier MPI.commWorld
        MPI.wait_ req
+  , testCase "bcast" $
+    do rank <- MPI.commRank MPI.commWorld
+       let sendmsg :: String = "Hello, World!"
+       recvmsg :: String <-
+         if rank == MPI.rootRank
+         then do req <- MPI.ibcastSend sendmsg MPI.rootRank MPI.commWorld
+                 MPI.wait_ req
+                 return sendmsg
+         else do req <- MPI.ibcastRecv MPI.rootRank MPI.commWorld
+                 MPI.wait_ req
+       recvmsg == sendmsg @? ""
   ]
