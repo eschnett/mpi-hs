@@ -329,11 +329,13 @@ bcastRecv root comm =
   do rank <- MPI.commRank comm
      mpiAssert (rank /= root) "bcastRecv: expected rank /= root"
      lenbuf <- mallocForeignPtr @CLong
-     MPI.bcast (lenbuf, 1::Int) root comm
+     lenreq <- MPI.ibcast (lenbuf, 1::Int) root comm
+     whileM_ (not <$> MPI.test_ lenreq) yield
      len <- withForeignPtr lenbuf peek
      ptr <- mallocBytes (fromIntegral len)
      recvbuf <- B.unsafePackMallocCStringLen (ptr, fromIntegral len)
-     MPI.bcast recvbuf root comm               
+     req <- MPI.ibcast recvbuf root comm               
+     whileM_ (not <$> MPI.test_ req) yield
      recvobj <- deserialize recvbuf
      return recvobj
 
