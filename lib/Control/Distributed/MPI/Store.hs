@@ -227,7 +227,10 @@ send :: CanSerialize a
      -> IO ()
 send sendobj sendrank sendtag comm =
   do sendbuf <- serialize sendobj
-     req <- MPI.isend sendbuf sendrank sendtag comm
+     -- Use 'unsafeUseAsCStringLen' to ensure 'sendbuf' is not freed
+     -- too early
+     B.unsafeUseAsCStringLen sendbuf $ \_ ->
+       do req <- MPI.isend sendbuf sendrank sendtag comm
      whileM_ (not <$> MPI.test_ req) yield
 
 -- | Send and receive objects simultaneously.
