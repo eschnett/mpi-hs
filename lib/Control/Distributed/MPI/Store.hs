@@ -360,8 +360,8 @@ ibarrier :: Comm
          -> IO (Request ())
 ibarrier comm =
   do result <- newEmptyMVar
-     req <- MPI.ibarrier comm
      _ <- forkIO $
-       do whileM_ (not <$> MPI.test_ req) yield
+       do req <- MPI.ibarrier comm
+          whileM_ (not <$> MPI.test_ req) yield
           putMVar result (Status MPI.anySource MPI.anyTag, ())
      return (Request result)
