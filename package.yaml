@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.4.2.0'
+version: '0.5.1.1'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
@@ -53,7 +53,6 @@ library:
     - bytestring
     - cereal
     - monad-loops
-    - packman
     - store
   build-tools:
     - c2hs
@@ -71,6 +70,7 @@ executables:
     main: Main.hs
     dependencies:
       - base
+      - binary
       - mpi-hs
     ghc-options:
       - -rtsopts
@@ -106,8 +106,8 @@ tests:
       - -rtsopts
       - -threaded
       - -with-rtsopts=-N
-  mpi-test-packing:
-    source-dirs: tests/packing
+  mpi-test-binary:
+    source-dirs: tests/binary
     main: Main.hs
     dependencies:
       - base

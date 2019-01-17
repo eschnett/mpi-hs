@@ -1,16 +1,16 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
--- | Module: Control.Distributed.MPI.Packing
+-- | Module: Control.Distributed.MPI.Binary
 -- Description: Simplified MPI bindings with automatic serialization
---              based on GHC.Packing
+--              based on Data.Binary
 -- Copyright: (C) 2018 Erik Schnetter
 -- License: Apache-2.0
 -- Maintainer: Erik Schnetter <schnetter@gmail.com>
 -- Stability: experimental
 -- Portability: Requires an externally installed MPI library
 
-module Control.Distributed.MPI.Packing
+module Control.Distributed.MPI.Binary
   ( -- * Types, and associated functions and constants
     MPIException(..)
 
@@ -83,14 +83,14 @@ import Control.Concurrent
 import Control.Exception
 import Control.Monad
 import Control.Monad.Loops
-import qualified Data.ByteString.Lazy as BL
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Unsafe as B
 import qualified Data.Binary as Binary
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Unsafe as B
+import Data.Coerce
 import Data.Typeable
 import Foreign
 import Foreign.C.Types
-import qualified GHC.Packing as Packing
 
 import qualified Control.Distributed.MPI as MPI
 import Control.Distributed.MPI
@@ -118,12 +118,19 @@ import Control.Distributed.MPI
 
 
 
--- Serialization, based on GHC.Packing
-type CanSerialize a = Typeable a
+-- Serialization, based on Data.Binary
+type CanSerialize a = Binary.Binary a
 serialize :: CanSerialize a => a -> IO B.ByteString
-serialize = fmap (BL.toStrict . Binary.encode) . Packing.trySerialize
+serialize = return . BL.toStrict . Binary.encode
 deserialize :: CanSerialize a => B.ByteString -> IO a
-deserialize = Packing.deserialize . Binary.decode . BL.fromStrict
+deserialize = return . Binary.decode . BL.fromStrict
+
+-- Why is this necessary? Shouldn't 'Data.Binary' already contain
+-- this?
+instance Binary.Binary CInt where
+  put x = Binary.put @Int32 (coerce x)
+  get = coerce <$> (Binary.get @Int32)
+instance Binary.Binary Rank
 
 
 

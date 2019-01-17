@@ -183,8 +183,8 @@ There are four test cases provided in `tests`:
 
 ```
 stack build --test --no-run-tests
-mpirun -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test/mpi-test && echo SUCCESS || echo FAILURE
-mpirun -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-packing/mpi-test-packing && echo SUCCESS || echo FAILURE
-mpirun -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize && echo SUCCESS || echo FAILURE
-mpirun -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-store/mpi-test-store && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test/mpi-test && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-binary/mpi-test-binary && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-store/mpi-test-store && echo SUCCESS || echo FAILURE
 ```

@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: fpco/stack-build:lts-12.16
+      - image: fpco/stack-build:lts-13.3
     working_directory: /home/stackage
     steps:
       - checkout
@@ -11,17 +11,18 @@ jobs:
           # TODO: Install a multi-threaded MPI library
           sudo apt -y install libopenmpi-dev openmpi-bin
       - restore_cache:
-          key: cache-lts-12.16
+          key: cache-lts-13.3
       - run: |
           stack --no-terminal --system-ghc build --haddock --test --only-dependencies
       - save_cache:
-          key: cache-lts-12.16
+          key: cache-lts-13.3
           paths:
             - ~/.stack
       - run: |
           stack --no-terminal --system-ghc build --haddock --test --no-run-tests &&
           mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec example &&
           mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test/mpi-test &&
-          # mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test-packing/mpi-test-packing &&
+          # mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test-binary/mpi-test-binary &&
+          # mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize &&
           # mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test-store/mpi-test-store &&
           stack --no-terminal --system-ghc install
