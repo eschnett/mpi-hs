@@ -61,6 +61,13 @@ library:
     - c/src/mpihs.c
   include-dirs:
     - c/include
+    - /usr/lib/x86_64-linux-gnu/openmpi/include # Debian
+    - /opt/local/include/openmpi-mp             # MacPorts
+    - /usr/lib/openmpi/include                  # Ubuntu
+  extra-lib-dirs:
+    - /usr/lib/x86_64-linux-gnu/openmpi/lib # Debian
+    - /opt/local/lib/openmpi-mp             # MacPorts
+    - /usr/lib/openmpi/lib                  # Ubuntu
   extra-libraries:
     - mpi
 

@@ -1,5 +1,5 @@
 # Resolver to choose a 'specific' stackage snapshot or a compiler version.
-resolver: lts-13.4
+resolver: lts-13.7
 
 # User packages to be built.
 packages:
@@ -8,12 +8,14 @@ packages:
 # extra-deps:
 #   - packman-0.5.0
 
-# Extra directories used by stack for building
-extra-include-dirs:
-  - /opt/local/include/openmpi-mp             # MacPorts
-  - /usr/lib/openmpi/include                  # Ubuntu
-  - /usr/lib/x86_64-linux-gnu/openmpi/include # Debian
-extra-lib-dirs:
-  - /opt/local/lib/openmpi-mp
-  - /usr/lib/openmpi/lib
-  - /usr/lib/x86_64-linux-gnu/openmpi/lib
+# # Extra directories used by stack for building
+# extra-include-dirs:
+#   - /home/eschnetter/openmpi-3.1.2/lib
+#   - /opt/local/include/openmpi-mp             # MacPorts
+#   - /usr/lib/openmpi/include                  # Ubuntu
+#   - /usr/lib/x86_64-linux-gnu/openmpi/include # Debian
+# extra-lib-dirs:
+#   - /home/eschnetter/openmpi-3.1.2/lib
+#   - /opt/local/lib/openmpi-mp
+#   - /usr/lib/openmpi/lib
+#   - /usr/lib/x86_64-linux-gnu/openmpi/lib
