@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.5.1.1'
+version: '0.5.1.2'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"

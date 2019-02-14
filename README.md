@@ -2,11 +2,12 @@
 
 [MPI](https://www.mpi-forum.org) bindings for Haskell
 
-* [<img alt="Github" src="share/GitHub_Logo.png" height="25"
-  align="middle">](https://github.com/eschnett/mpi-hs)
-* [[Hackage]](http://hackage.haskell.org/package/mpi-hs) Haskell
+* [GitHub](https://github.com/eschnett/mpi-hs): Source code repository
+* [Hackage](http://hackage.haskell.org/package/mpi-hs): Haskell
   package and documentation
-* [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
+* [CircleCI](https://circleci.com/gh/eschnett/mpi-hs): Continuous
+  integration
+  [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
 
 
 

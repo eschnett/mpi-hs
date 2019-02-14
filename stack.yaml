@@ -4,18 +4,3 @@ resolver: lts-13.7
 # User packages to be built.
 packages:
   - .
-
-# extra-deps:
-#   - packman-0.5.0
-
-# # Extra directories used by stack for building
-# extra-include-dirs:
-#   - /home/eschnetter/openmpi-3.1.2/lib
-#   - /opt/local/include/openmpi-mp             # MacPorts
-#   - /usr/lib/openmpi/include                  # Ubuntu
-#   - /usr/lib/x86_64-linux-gnu/openmpi/include # Debian
-# extra-lib-dirs:
-#   - /home/eschnetter/openmpi-3.1.2/lib
-#   - /opt/local/lib/openmpi-mp
-#   - /usr/lib/openmpi/lib
-#   - /usr/lib/x86_64-linux-gnu/openmpi/lib
