@@ -47,8 +47,8 @@ jobs:
           paths:
             - ~/.stack
       - run: |
-          rm -rf ~/.stack
-          stack --no-terminal --system-ghc build --haddock --test --no-run-tests &&
+          # stack --no-terminal --system-ghc build --haddock --test --no-run-tests &&
+          stack --no-terminal --system-ghc build --test --no-run-tests &&
           mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec example &&
           mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test/mpi-test &&
           # mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test-binary/mpi-test-binary &&
