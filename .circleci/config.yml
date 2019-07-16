@@ -26,3 +26,8 @@ jobs:
           # mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize &&
           # mpirun --allow-run-as-root -np 3 --mca btl self,vader stack --no-terminal --system-ghc exec $(stack --no-terminal --system-ghc path --dist-dir)/build/mpi-test-store/mpi-test-store &&
           stack --no-terminal --system-ghc install
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build-openmpi
