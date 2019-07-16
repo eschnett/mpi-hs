@@ -1,6 +1,6 @@
 version: 2
 jobs:
-  build-mpich
+  build-mpich:
     docker:
       - image: fpco/stack-build:lts-13.28
     working_directory: /home/stackage
