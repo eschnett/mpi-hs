@@ -1,8 +1,8 @@
 version: 2
 jobs:
-  build:
+  build-openmpi:
     docker:
-      - image: fpco/stack-build:lts-13.7
+      - image: fpco/stack-build:lts-13.28
     working_directory: /home/stackage
     steps:
       - checkout
@@ -11,11 +11,11 @@ jobs:
           # TODO: Install a multi-threaded MPI library
           sudo apt -y install libopenmpi-dev openmpi-bin
       - restore_cache:
-          key: cache-lts-13.7
+          key: cache-lts-13.28
       - run: |
           stack --no-terminal --system-ghc build --haddock --test --only-dependencies
       - save_cache:
-          key: cache-lts-13.7
+          key: cache-lts-13.28
           paths:
             - ~/.stack
       - run: |
