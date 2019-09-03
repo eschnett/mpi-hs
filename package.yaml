@@ -43,11 +43,11 @@ flags:
   openmpi-macports:
     description: Use OpenMPI on MacPorts
     manual: true
-    default: false
+    default: true
   openmpi-ubuntu:
     description: Use OpenMPI on Ubuntu
     manual: true
-    default: false
+    default: true
   mpich-macports:
     description: Use MPICH on MacPorts
     manual: true
