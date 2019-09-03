@@ -122,21 +122,27 @@ pointToPoint :: TestTree
 pointToPoint = testGroup "point-to-point"
   [ testCase "send and recv" $
     do rank <- MPI.commRank MPI.commWorld
-
+       size <- MPI.commSize MPI.commWorld
+       
        let msg = 42
        buf <- mallocForeignPtr @CInt
        withForeignPtr buf $ \ptr -> poke ptr msg
-
-       MPI.send (buf, 1::Int) rank MPI.unitTag MPI.commWorld
-
-       buf' <- mallocForeignPtr @CInt
-       st <- MPI.recv (buf', 1::Int) rank MPI.unitTag MPI.commWorld
-       msg' <- withForeignPtr buf' peek
-
-       source <- MPI.getSource st
-       tag <- MPI.getTag st
-       count <- MPI.getCount st MPI.datatypeInt
-       (msg' == msg && source == rank && tag == MPI.unitTag && count == 1) @? ""
+       
+       if rank + 1 < size
+         then MPI.send (buf, 1::Int) (rank + 1) MPI.unitTag MPI.commWorld
+         else return ()
+       
+       if rank - 1 >= 0 then
+         do buf' <- mallocForeignPtr @CInt
+            st <- MPI.recv (buf', 1::Int) (rank - 1) MPI.unitTag MPI.commWorld
+            msg' <- withForeignPtr buf' peek
+            
+            source <- MPI.getSource st
+            tag <- MPI.getTag st
+            count <- MPI.getCount st MPI.datatypeInt
+            (msg' == msg && source == rank - 1 && tag == MPI.unitTag &&
+             count == 1) @? ""
+         else True @? ""
   , testCase "sendrecv" $
     do rank <- MPI.commRank MPI.commWorld
        size <- MPI.commSize MPI.commWorld

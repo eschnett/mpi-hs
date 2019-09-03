@@ -1,5 +1,6 @@
 # Resolver to choose a 'specific' stackage snapshot or a compiler version.
-resolver: lts-13.28
+resolver: lts-14.4
+# resolver: nightly-2019-08-30
 
 # User packages to be built.
 packages:

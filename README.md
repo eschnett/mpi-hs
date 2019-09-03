@@ -5,6 +5,8 @@
 * [GitHub](https://github.com/eschnett/mpi-hs): Source code repository
 * [Hackage](http://hackage.haskell.org/package/mpi-hs): Haskell
   package and documentation
+* [Stackage](https://www.stackage.org/package/mpi-hs): Stackage
+  snapshots
 * [CircleCI](https://circleci.com/gh/eschnett/mpi-hs): Continuous
   integration
   [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
@@ -157,14 +159,14 @@ To run the example provided in `src/Main.hs`:
 
 ```
 stack build
-mpirun -np 3 stack exec example && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 stack exec example && echo SUCCESS || echo FAILURE
 ```
 
 With OpenMPI, and when running on a single node (e.g. on a laptop or a
 workstation), these additional `mpirun` options might be useful:
 
 ```
-mpirun -np 3 --mca btl self,vader --oversubscribe stack exec example && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec example && echo SUCCESS || echo FAILURE
 ```
 
 The options `--mca btl self,vader` enable the shared memory byte
@@ -184,8 +186,9 @@ There are four test cases provided in `tests`:
 
 ```
 stack build --test --no-run-tests
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test/mpi-test && echo SUCCESS || echo FAILURE
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-binary/mpi-test-binary && echo SUCCESS || echo FAILURE
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize && echo SUCCESS || echo FAILURE
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec $(stack path --dist-dir)/build/mpi-test-store/mpi-test-store && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-binary/mpi-test-binary && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable && echo SUCCESS || echo FAILURE
+mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-store/mpi-test-store && echo SUCCESS || echo FAILURE
 ```

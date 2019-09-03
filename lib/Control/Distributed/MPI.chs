@@ -350,11 +350,26 @@ instance Buffer B.ByteString where
 -- Communicators need to be explicitly created and freed by the MPI
 -- library. 'commWorld' is a communicator that is always available,
 -- and which includes all processes.
-{#pointer *MPI_Comm as Comm foreign newtype#}
 
-deriving instance Eq Comm
-deriving instance Ord Comm
-deriving instance Show Comm
+newtype Comm = Comm CComm
+  deriving (Eq, Ord, Show)
+
+type CComm = {#type MPI_Comm#}
+
+-- Pass a communicator directly
+fromComm :: Comm -> CComm
+fromComm (Comm ccomm) = ccomm
+
+-- Pass a communicator as pointer
+withComm :: Comm -> (Ptr CComm -> IO a) -> IO a
+withComm (Comm ccomm) f =
+  alloca $ \ptr -> do poke ptr ccomm
+                      f ptr
+-- Read a communicator from a pointer
+peekComm :: Ptr CComm -> IO Comm
+peekComm ptr =
+  do ccomm <- peek ptr
+     return (Comm ccomm)
 
 -- | The result of comparing two MPI communicator (see 'commCompare').
 {#enum ComparisonResult {} deriving (Eq, Ord, Read, Show, Generic)#}
@@ -391,11 +406,26 @@ fromCount (Count c) = fromIntegral c
 -- explicitly created and freed by the MPI library. Predefined
 -- datatypes exist for most simple C types such as 'CInt' or
 -- 'CDouble'.
-{#pointer *MPI_Datatype as Datatype foreign newtype#}
 
-deriving instance Eq Datatype
-deriving instance Ord Datatype
-deriving instance Show Datatype
+newtype Datatype = Datatype CDatatype
+  deriving (Eq, Ord, Show)
+
+type CDatatype = {#type MPI_Datatype#}
+
+-- Pass a datatype directly
+fromDatatype :: Datatype -> CDatatype
+fromDatatype (Datatype cdatatype) = cdatatype
+
+-- Pass a datatype as pointer
+withDatatype :: Datatype -> (Ptr CDatatype -> IO a) -> IO a
+withDatatype (Datatype cdatatype) f =
+  alloca $ \ptr -> do poke ptr cdatatype
+                      f ptr
+-- Read a datatype from a pointer
+peekDatatype :: Ptr CDatatype -> IO Datatype
+peekDatatype ptr =
+  do cdatatype <- peek ptr
+     return (Datatype cdatatype)
 
 
 
@@ -406,11 +436,26 @@ deriving instance Show Datatype
 --
 -- An MPI reduction operation corresponds to a Semigroup, not a
 -- Monoid, i.e. MPI has no notion of a respective neutral element.
-{#pointer *MPI_Op as Op foreign newtype#}
 
-deriving instance Eq Op
-deriving instance Ord Op
-deriving instance Show Op
+newtype Op = Op COp
+  deriving (Eq, Ord, Show)
+
+type COp = {#type MPI_Op#}
+
+-- Pass a operator directly
+fromOp :: Op -> COp
+fromOp (Op cop) = cop
+
+-- Pass a operator as pointer
+withOp :: Op -> (Ptr COp -> IO a) -> IO a
+withOp (Op cop) f =
+  alloca $ \ptr -> do poke ptr cop
+                      f ptr
+-- Read a operator from a pointer
+peekOp :: Ptr COp -> IO Op
+peekOp ptr =
+  do cop <- peek ptr
+     return (Op cop)
 
 
 
@@ -459,11 +504,35 @@ rootRank = toRank 0
 -- | An MPI request, wrapping @MPI_Request@. A request describes a
 -- communication that is currently in progress. Each request must be
 -- explicitly freed via 'cancel', 'test', or 'wait'.
-{#pointer *MPI_Request as Request foreign newtype#}
+--
+-- Some MPI functions modify existing requests. The new requests are
+-- never interesting, and will not be returned.
+--
+-- TODO: Handle 'Comm', 'Datatype' etc. in this way as well (all
+-- except 'Status').
+newtype Request = Request CRequest
+  deriving (Eq, Ord, Show)
 
-deriving instance Eq Request
-deriving instance Ord Request
-deriving instance Show Request
+#if defined REQUEST_IS_INT
+type CRequest = CInt
+#else
+type CRequest = Ptr ()
+#endif
+
+-- Pass a request directly
+fromRequest :: Request -> CRequest
+fromRequest (Request creq) = creq
+
+-- Pass a request as pointer
+withRequest :: Request -> (Ptr CRequest -> IO a) -> IO a
+withRequest (Request creq) f =
+  alloca $ \ptr -> do poke ptr creq
+                      f ptr
+-- Read a request from a pointer
+peekRequest :: Ptr CRequest -> IO Request
+peekRequest ptr =
+  do creq <- peek ptr
+     return (Request creq)
 
 
 
@@ -563,15 +632,21 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
 
 
 -- | A null (invalid) communicator (@MPI_COMM_NULL@).
-{#fun pure mpihs_get_comm_null as commNull {+} -> `Comm'#}
+{#fun pure mpihs_get_comm_null as commNull
+   { alloca- `Comm' peekComm*
+   } -> `()'#}
 
 -- | The self communicator (@MPI_COMM_SELF@). Each process has its own
 -- self communicator that includes only this process.
-{#fun pure mpihs_get_comm_self as commSelf {+} -> `Comm'#}
+{#fun pure mpihs_get_comm_self as commSelf
+   { alloca- `Comm' peekComm*
+   } -> `()'#}
 
 -- | The world communicator, which includes all processes
 -- (@MPI_COMM_WORLD@).
-{#fun pure mpihs_get_comm_world as commWorld {+} -> `Comm'#}
+{#fun pure mpihs_get_comm_world as commWorld
+    { alloca- `Comm' peekComm*
+    } -> `()'#}
 
 
 
@@ -583,47 +658,75 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
 
 
 -- | A null (invalid) datatype.
-{#fun pure mpihs_get_datatype_null as datatypeNull {+} -> `Datatype'#}
+{#fun pure mpihs_get_datatype_null as datatypeNull
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for a byte (essentially 'CUChar') (@MPI_BYTE@).
-{#fun pure mpihs_get_byte as datatypeByte {+} -> `Datatype'#}
+{#fun pure mpihs_get_byte as datatypeByte
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CChar' (@MPI_CHAR@).
-{#fun pure mpihs_get_char as datatypeChar {+} -> `Datatype'#}
+{#fun pure mpihs_get_char as datatypeChar
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CDouble' (@MPI_DOUBLE@).
-{#fun pure mpihs_get_double as datatypeDouble {+} -> `Datatype'#}
+{#fun pure mpihs_get_double as datatypeDouble
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CFloat' (@MPI_FLOAT@).
-{#fun pure mpihs_get_float as datatypeFloat {+} -> `Datatype'#}
+{#fun pure mpihs_get_float as datatypeFloat
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CInt' (@MPI_INT@).
-{#fun pure mpihs_get_int as datatypeInt {+} -> `Datatype'#}
+{#fun pure mpihs_get_int as datatypeInt
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CLong' (@MPI_LONG@).
-{#fun pure mpihs_get_long as datatypeLong {+} -> `Datatype'#}
+{#fun pure mpihs_get_long as datatypeLong
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for the C type 'long double' (@MPI_LONG_DOUBLE@).
-{#fun pure mpihs_get_long_double as datatypeLongDouble {+} -> `Datatype'#}
+{#fun pure mpihs_get_long_double as datatypeLongDouble
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CLLong' (@MPI_LONG_LONG_INT@). (There is no MPI
 -- datatype for 'CULLong@).
-{#fun pure mpihs_get_long_long_int as datatypeLongLongInt {+} -> `Datatype'#}
+{#fun pure mpihs_get_long_long_int as datatypeLongLongInt
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CShort' (@MPI_SHORT@).
-{#fun pure mpihs_get_short as datatypeShort {+} -> `Datatype'#}
+{#fun pure mpihs_get_short as datatypeShort
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CUInt' (@MPI_UNSIGNED@).
-{#fun pure mpihs_get_unsigned as datatypeUnsigned {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned as datatypeUnsigned
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CUChar' (@MPI_UNSIGNED_CHAR@).
-{#fun pure mpihs_get_unsigned_char as datatypeUnsignedChar {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned_char as datatypeUnsignedChar
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CULong' (@MPI_UNSIGNED_LONG@).
-{#fun pure mpihs_get_unsigned_long as datatypeUnsignedLong {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned_long as datatypeUnsignedLong
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | MPI datatype for 'CUShort' (@MPI_UNSIGNED_SHORT@).
-{#fun pure mpihs_get_unsigned_short as datatypeUnsignedShort {+} -> `Datatype'#}
+{#fun pure mpihs_get_unsigned_short as datatypeUnsignedShort
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
 
 -- | A type class mapping Haskell types to MPI datatypes. This is used
 -- to automatically determine the MPI datatype for communication
@@ -644,45 +747,71 @@ instance HasDatatype CUShort where getDatatype = datatypeUnsignedShort
 
 
 -- | A null (invalid) reduction operation (@MPI_OP_NULL@).
-{#fun pure mpihs_get_op_null as opNull {+} -> `Op'#}
+{#fun pure mpihs_get_op_null as opNull
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The bitwise and @(.&.)@ reduction operation (@MPI_BAND@).
-{#fun pure mpihs_get_band as opBand {+} -> `Op'#}
+{#fun pure mpihs_get_band as opBand
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The bitwise or @(.|.)@ reduction operation (@MPI_BOR@).
-{#fun pure mpihs_get_bor as opBor {+} -> `Op'#}
+{#fun pure mpihs_get_bor as opBor
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The bitwise (@xor@) reduction operation (@MPI_BXOR@).
-{#fun pure mpihs_get_bxor as opBxor {+} -> `Op'#}
+{#fun pure mpihs_get_bxor as opBxor
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The logical and @(&&)@ reduction operation (@MPI_LAND@).
-{#fun pure mpihs_get_land as opLand {+} -> `Op'#}
+{#fun pure mpihs_get_land as opLand
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The logical or @(||)@ reduction operation (@MPI_LOR@).
-{#fun pure mpihs_get_lor as opLor {+} -> `Op'#}
+{#fun pure mpihs_get_lor as opLor
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The logical xor reduction operation (@MPI_LXOR@).
-{#fun pure mpihs_get_lxor as opLxor {+} -> `Op'#}
+{#fun pure mpihs_get_lxor as opLxor
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The 'maximum' reduction operation (@MPI_MAX@).
-{#fun pure mpihs_get_max as opMax {+} -> `Op'#}
+{#fun pure mpihs_get_max as opMax
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The argmax reduction operation to find the maximum and its rank
 -- (@MPI_MAXLOC@).
-{#fun pure mpihs_get_maxloc as opMaxloc {+} -> `Op'#}
+{#fun pure mpihs_get_maxloc as opMaxloc
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The 'minimum' reduction operation (@MPI_MIN@).
-{#fun pure mpihs_get_min as opMin {+} -> `Op'#}
+{#fun pure mpihs_get_min as opMin
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The argmin reduction operation to find the minimum and its rank
 -- (@MPI_MINLOC@).
-{#fun pure mpihs_get_minloc as opMinloc {+} -> `Op'#}
+{#fun pure mpihs_get_minloc as opMinloc
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The (@product@) reduction operation (@MPI_PROD@).
-{#fun pure mpihs_get_prod as opProd {+} -> `Op'#}
+{#fun pure mpihs_get_prod as opProd
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 -- | The (@sum@) reduction operation (@MPI_SUM@).
-{#fun pure mpihs_get_sum as opSum {+} -> `Op'#}
+{#fun pure mpihs_get_sum as opSum
+    {alloca- `Op' peekOp*
+    } -> `()'#}
 
 instance HasDatatype a => HasDatatype (Monoid.Product a) where
   getDatatype = getDatatype @a
@@ -714,7 +843,9 @@ instance HasDatatype a => HasDatatype (Semigroup.Min a) where
 
 
 -- | A null (invalid) request (@MPI_REQUEST_NULL@).
-{#fun pure mpihs_get_request_null as requestNull {+} -> `Request'#}
+{#fun mpihs_get_request_null as requestNull
+    { alloca- `Request' peekRequest*
+    } -> `()'#}
 
 
 
@@ -1021,8 +1152,8 @@ getVersion =
     , fromCount `Count'
     , withDatatype* %`Datatype'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to gather data from all processes and broadcast the result,
 -- and return a handle to the communication request (collective,
@@ -1050,8 +1181,8 @@ iallgather sendbuf recvbuf comm =
     , withDatatype* %`Datatype'
     , withOp* %`Op'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to reduce data from all processes and broadcast the result,
 -- and return a handle to the communication request (collective,
@@ -1081,8 +1212,8 @@ iallreduce sendbuf recvbuf op comm =
     , fromCount `Count'
     , withDatatype* %`Datatype'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to send data from all processes to all processes, and
 -- return a handle to the communication request (collective,
@@ -1109,8 +1240,8 @@ ialltoall sendbuf recvbuf comm =
 -- The request must be freed by calling 'test', 'wait', or similar.
 {#fun Ibarrier as ^
     { withComm* %`Comm'         -- ^ Communicator
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 {#fun Ibcast as ibcastTyped
     { id `Ptr ()'
@@ -1118,8 +1249,8 @@ ialltoall sendbuf recvbuf comm =
     , withDatatype* %`Datatype'
     , fromRank `Rank'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to broadcast data from one process to all processes, and
 -- return a handle to the communication request (collective,
@@ -1145,8 +1276,8 @@ ibcast buf root comm =
     , withDatatype* %`Datatype'
     , withOp* %`Op'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to reduce data from all processes via an exclusive (prefix)
 -- scan, and return a handle to the communication request (collective,
@@ -1183,8 +1314,8 @@ iexscan sendbuf recvbuf op comm =
     , withDatatype* %`Datatype'
     , fromRank `Rank'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to gather data from all processes to the root process, and
 -- return a handle to the communication request (collective,
@@ -1241,12 +1372,11 @@ initThread ts = do ts' <- initThread_ argc argv ts
 
 iprobeBool :: Rank -> Tag -> Comm -> IO (Bool, Status)
 iprobeBool rank tag comm =
-  withComm comm $ \comm' ->
   do st <- Status <$> mallocForeignPtrBytes {#sizeof MPI_Status#}
      withStatus st $ \st' ->
        do alloca $ \flag ->
-            do _ <- {#call mpihs_iprobe as iprobeBool_#}
-                    (fromRank rank) (fromTag tag) comm' flag st'
+            do _ <- {#call Iprobe as iprobeBool_#}
+                    (fromRank rank) (fromTag tag) (fromComm comm) flag st'
                b <- peekBool flag
                return (b, st)
 
@@ -1269,11 +1399,10 @@ iprobe_ :: Rank                 -- ^ Source rank (may be 'anySource')
         -> Comm                 -- ^ Communicator
         -> IO Bool              -- ^ Whether a message is available
 iprobe_ rank tag comm =
-  withComm comm $ \comm' ->
   do withStatusIgnore $ \st ->
        do alloca $ \flag ->
-            do _ <- {#call mpihs_iprobe as iprobe__#}
-                    (fromRank rank) (fromTag tag) comm' flag st
+            do _ <- {#call Iprobe as iprobe__#}
+                    (fromRank rank) (fromTag tag) (fromComm comm) flag st
                peekBool flag
 
 {#fun Irecv as irecvTyped
@@ -1283,8 +1412,8 @@ iprobe_ rank tag comm =
     , fromRank `Rank'
     , fromTag `Tag'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to receive a message, and return a handle to the
 -- communication request (non-blocking,
@@ -1310,8 +1439,8 @@ irecv recvbuf recvrank recvtag comm =
     , withOp* %`Op'
     , fromRank `Rank'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to reduce data from all processes, and return a handle to
 -- the communication request (collective, non-blocking,
@@ -1340,8 +1469,8 @@ ireduce sendbuf recvbuf op rank comm =
     , withDatatype* %`Datatype'
     , withOp* %`Op'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to reduce data from all processes via an (inclusive) scan,
 -- and return a handle to the communication request (collective,
@@ -1372,8 +1501,8 @@ iscan sendbuf recvbuf op comm =
     , withDatatype* %`Datatype'
     , fromRank `Rank'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to scatter data from the root process to all processes, and
 -- return a handle to the communication request (collective,
@@ -1402,8 +1531,8 @@ iscatter sendbuf recvbuf root comm =
     , fromRank `Rank'
     , fromTag `Tag'
     , withComm* %`Comm'
-    , +
-    } -> `Request' return*#}
+    , alloca- `Request' peekRequest*
+    } -> `()' return*-#}
 
 -- | Begin to send a message, and return a handle to the
 -- communication request (non-blocking,
@@ -1521,12 +1650,11 @@ reduce sendbuf recvbuf op rank comm =
 
 requestGetStatusBool :: Request -> IO (Bool, Status)
 requestGetStatusBool req =
-  withRequest req $ \req' ->
   alloca $ \flag ->
   do st <- Status <$> mallocForeignPtrBytes {#sizeof MPI_Status#}
      withStatus st $ \st' ->
        do _ <- {#call Request_get_status as requestGetStatusBool_#}
-               (castPtr req') flag st'
+               (fromRequest req) flag st'
           b <- peekBool flag
           return (b, st)
 
@@ -1539,26 +1667,16 @@ requestGetStatus :: Request     -- ^ Communication request
                                       -- 'Nothing'
 requestGetStatus req = bool2maybe <$> requestGetStatusBool req
 
--- {#fun Request_get_status as requestGetStatus_
---     { withRequest* `Request'
---     , alloca- `Bool' peekBool*
---     , withStatusIgnore- `Status'
---     } -> `()' return*-#}
-
 -- | Check whether a communication has completed without freeing the
 -- communication request
 -- (@[MPI_Request_get_status](https://www.open-mpi.org/doc/current/man3/MPI_Request_get_status.3.php)@).
 -- This function does not return a status, which might be more
 -- efficient if the status is not needed.
-requestGetStatus_ :: Request    -- ^ Communication request
-                  -> IO Bool    -- ^ Whether the request had completed
-requestGetStatus_ req =
-  withRequest req $ \req' ->
-  alloca $ \flag ->
-  withStatusIgnore $ \st ->
-  do _ <- {#call MPI_Request_get_status as requestGetStatus__#}
-          (castPtr req') flag st
-     peekBool flag
+{#fun Request_get_status as requestGetStatus_
+    { fromRequest `Request'
+    , alloca- `Bool' peekBool*
+    , withStatusIgnore- `Status'
+    } -> `()' return*-#}
 
 {#fun Scan as scanTyped
     { id `Ptr ()'
@@ -1731,25 +1849,16 @@ test :: Request           -- ^ Communication request
                           -- else 'Nothing'
 test req = bool2maybe <$> testBool req
 
--- {#fun Test as test_
---     { withRequest* `Request'
---     , alloca- `Bool' peekBool*
---     , withStatusIgnore- `Status'
---     } -> `()' return*-#}
-
 -- | Check whether a communication has completed, and free the
 -- communication request if so
 -- (@[MPI_Test](https://www.open-mpi.org/doc/current/man3/MPI_Test.3.php)@).
 -- This function does not return a status, which might be more
 -- efficient if the status is not needed.
-test_ :: Request                -- ^ Communication request
-      -> IO Bool                -- ^ Whether the request had completed
-test_ req =
-  withRequest req $ \req' ->
-  alloca $ \flag ->
-  withStatusIgnore $ \st ->
-  do _ <- {#call Test as test__#} req' flag st
-     peekBool flag
+{#fun Test as test_
+    { withRequest* `Request'
+    , alloca- `Bool' peekBool*
+    , withStatusIgnore- `Status'
+    } -> `()' return*-#}
 
 -- | Wait for a communication request to complete, then free the
 --  request

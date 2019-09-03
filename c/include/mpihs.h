@@ -70,8 +70,4 @@ MPI_Status *mpihs_get_status_ignore();
 // Tag
 int mpihs_get_any_tag();
 
-// Wrappers
-int mpihs_iprobe(int source, int tag, MPI_Comm *comm, int *flag,
-                 MPI_Status *status);
-
 #endif // #ifndef MPIHS_H

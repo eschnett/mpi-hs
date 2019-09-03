@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.5.1.2'
+version: '0.5.2.0'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
@@ -61,15 +61,23 @@ library:
     - c/src/mpihs.c
   include-dirs:
     - c/include
-    - /usr/lib/x86_64-linux-gnu/openmpi/include # Debian
-    - /opt/local/include/openmpi-mp             # MacPorts
-    - /usr/lib/openmpi/include                  # Ubuntu
+    #[Debian]           - /usr/lib/x86_64-linux-gnu/openmpi/include
+    #[MacPorts MPICH]   - /opt/local/include/mpich-gcc9
+    #[MacPorts OpenMPI] - /opt/local/include/openmpi-mp
+    #[Ubuntu MPICH]     - /usr/lib/mpich/include
+    #[Ubuntu OpenMPI]   - /usr/lib/openmpi/include
   extra-lib-dirs:
-    - /usr/lib/x86_64-linux-gnu/openmpi/lib # Debian
-    - /opt/local/lib/openmpi-mp             # MacPorts
-    - /usr/lib/openmpi/lib                  # Ubuntu
+    #[Debian]           - /usr/lib/x86_64-linux-gnu/openmpi/lib
+    #[MacPorts MPICH]   - /opt/local/lib/mpich-gcc9
+    #[MacPorts OpenMPI] - /opt/local/lib/openmpi-mp
+    #[Ubuntu MPICH]     - /usr/lib/mpich/lib
+    #[Ubuntu OpenMPI]   - /usr/lib/openmpi/lib
   extra-libraries:
-    - mpi
+    #[Debian]           - mpi
+    #[MacPorts MPICH]   - mpi
+    #[MacPorts OpenMPI] - mpi
+    #[Ubuntu MPICH]     - mpich
+    #[Ubuntu OpenMPI]   - mpi
 
 executables:
   example:
@@ -129,6 +137,20 @@ tests:
       - -with-rtsopts=-N
   mpi-test-serialize:
     source-dirs: tests/serialize
+    main: Main.hs
+    dependencies:
+      - base
+      - mpi-hs
+      # - tasty
+      # - tasty-hunit
+      # - tasty-hspec
+      # - unix
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+  mpi-test-storable:
+    source-dirs: tests/storable
     main: Main.hs
     dependencies:
       - base
