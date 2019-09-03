@@ -191,20 +191,6 @@ tests:
       - -rtsopts
       - -threaded
       - -with-rtsopts=-N
-  mpi-test-storable:
-    source-dirs: tests/storable
-    main: Main.hs
-    dependencies:
-      - base
-      - mpi-hs
-      # - tasty
-      # - tasty-hunit
-     # - tasty-hspec
-      # - unix
-    ghc-options:
-      - -rtsopts
-      - -threaded
-      - -with-rtsopts=-N
   mpi-test-store:
     source-dirs: tests/store
     main: Main.hs
