@@ -14,14 +14,14 @@ jobs:
     vmImage: ubuntu-16.04
     os: linux
 
-- template: ./.azure/azure-osx-template.yml
-  parameters:
-    name: macOS
-    vmImage: macOS-10.14
-    os: osx
-
-- template: ./.azure/azure-windows-template.yml
-  parameters:
-   name: Windows
-   vmImage: vs2017-win2016
-   os: windows
+#TODO - template: ./.azure/azure-osx-template.yml
+#TODO   parameters:
+#TODO     name: macOS
+#TODO     vmImage: macOS-10.14
+#TODO     os: osx
+#TODO 
+#TODO - template: ./.azure/azure-windows-template.yml
+#TODO   parameters:
+#TODO    name: Windows
+#TODO    vmImage: vs2017-win2016
+#TODO    os: windows
