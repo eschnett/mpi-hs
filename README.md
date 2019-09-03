@@ -7,9 +7,6 @@
   package and documentation
 * [Stackage](https://www.stackage.org/package/mpi-hs): Stackage
   snapshots
-* [CircleCI](https://circleci.com/gh/eschnett/mpi-hs): Continuous
-  integration
-  [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
 * [Azure
   Pipelines](https://dev.azure.com/schnetter/ringal/_build):
   Build Status [![Build
