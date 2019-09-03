@@ -10,6 +10,13 @@
 * [CircleCI](https://circleci.com/gh/eschnett/mpi-hs): Continuous
   integration
   [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
+* [CircleCI](https://circleci.com/gh/eschnett/mpi-hs): Continuous
+  integration
+  [![CircleCI](https://circleci.com/gh/eschnett/mpi-hs.svg?style=svg)](https://circleci.com/gh/eschnett/mpi-hs)
+* [Azure
+  Pipelines](https://dev.azure.com/schnetter/ringal/_build):
+  Build Status [![Build
+  Status](https://dev.azure.com/schnetter/mpi-hs/_apis/build/status/eschnett.mpi-hs?branchName=master)](https://dev.azure.com/schnetter/mpi-hs/_build/latest?definitionId=1&branchName=master)
 
 
 

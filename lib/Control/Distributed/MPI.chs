@@ -513,11 +513,7 @@ rootRank = toRank 0
 newtype Request = Request CRequest
   deriving (Eq, Ord, Show)
 
-#if defined REQUEST_IS_INT
-type CRequest = CInt
-#else
-type CRequest = Ptr ()
-#endif
+type CRequest = {#type MPI_Request#}
 
 -- Pass a request directly
 fromRequest :: Request -> CRequest
