@@ -50,7 +50,7 @@ trap 'rm -r "$dir"' EXIT
 # /Users/eschnett/.stack/setup-exe-cache/x86_64-osx/Cabal-simple_mPHDZzAJ_2.2.0.1_ghc-8.4.4 --builddir=.stack-work/dist/x86_64-osx/Cabal-2.2.0.1 haddock --html --hoogle --haddock-option=--hyperlinked-source --html-location='/package/$pkg-$version/docs' --contents-location='/package/$pkg-$version'
 
 # Combining the two above, and updating version numbers:
-/Users/eschnett/.stack/setup-exe-cache/x86_64-osx/Cabal-simple_mPHDZzAJ_2.4.0.1_ghc-8.6.3 --builddir=$(stack path --dist-dir) haddock --html --hoogle --haddock-option=--hyperlinked-source --html-location='/package/$pkg-$version/docs' --contents-location='/package/$pkg-$version'
+/Users/eschnett/.stack/setup-exe-cache/x86_64-osx/Cabal-simple_mPHDZzAJ_2.4.0.1_ghc-8.6.5 --builddir=$(stack path --dist-dir) haddock --html --hoogle --haddock-option=--hyperlinked-source --html-location='/package/$pkg-$version/docs' --contents-location='/package/$pkg-$version'
 
 # cp -R "dist/doc/html/$pkg/" "$dir/$pkg-$ver-docs"
 cp -R "./$(stack path --dist-dir)/doc/html/$pkg/" "$dir/$pkg-$ver-docs"

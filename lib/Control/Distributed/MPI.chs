@@ -59,9 +59,7 @@
 --   intended to be imported qualified, as in 'import qualified
 --   Control.Distributed.MPI as MPI'.
 --
--- * Opaque types such as @MPI_Request@ are wrapped via newtypes
---   holding pointers and are allocated on the heap as foreign
---   pointers.
+-- * Opaque types such as @MPI_Request@ are wrapped via newtypes.
 --
 -- * The MPI error return code is omitted. Currently error codes are
 --   ignored, since the default MPI behaviour is to terminate the
@@ -71,7 +69,7 @@
 -- * Output arguments that are written via pointers in C are returned.
 --   Some functions now return tuples. If the output argument is a
 --   boolean value that indicates whether another output argument is
---   value, then this is translated into a 'Maybe'.
+--   valid, then this is translated into a 'Maybe'.
 --
 -- * MPI has a facility to pass @MPI_STATUS_IGNORE@ to indicate that
 --   no message status should be returned. This is instead handled by
