@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.5.2.1'
+version: '0.5.3.0'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
@@ -179,6 +179,20 @@ tests:
       - -with-rtsopts=-N
   mpi-test-serialize:
     source-dirs: tests/serialize
+    main: Main.hs
+    dependencies:
+      - base
+      - mpi-hs
+      # - tasty
+      # - tasty-hunit
+      # - tasty-hspec
+      # - unix
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+  mpi-test-storable:
+    source-dirs: tests/storable
     main: Main.hs
     dependencies:
       - base
