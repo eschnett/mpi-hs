@@ -8,7 +8,7 @@
 * [Stackage](https://www.stackage.org/package/mpi-hs): Stackage
   snapshots
 * [Azure
-  Pipelines](https://dev.azure.com/schnetter/ringal/_build):
+  Pipelines](https://dev.azure.com/schnetter/mpi-hs/_build):
   Build Status [![Build
   Status](https://dev.azure.com/schnetter/mpi-hs/_apis/build/status/eschnett.mpi-hs?branchName=master)](https://dev.azure.com/schnetter/mpi-hs/_build/latest?definitionId=1&branchName=master)
 
@@ -89,14 +89,36 @@ operating system nor these libraries provide any protection against
 such a mismatch.)
 -->
 
-In many cases, the MPI library will be installed in `/usr/include`,
+In some cases, the MPI library will be installed in `/usr/include`,
 `/usr/lib`, and `/usr/bin`, respectively. In this case, no further
 configuration is necessary, and `mpi-hs` will build out of the box
 with `stack build`.
 
-On Ubuntu, one MPI package is `openmpi-dev`. It installs into
-`/usr/lib/openmpi/include`, `/usr/lib/openmpi/lib`, and `/usr/bin/`.
-You need to ensure that these settings are present in `stack.yaml`:
+For convenience, this package offers Cabal flags to handle several
+common cases where the MPI library is not installed in a standard
+location:
+
+- OpenMPI on Debian Linux (package `openmpi-dev`): use `--flag
+  mpi-hs:openmpi-debian`
+- OpenMPI on Ubuntu Linux (package `openmpi-dev`): use `--flag
+  mpi-hs:openmpi-ubuntu`
+- OpenMPI on macOS with MacPorts (package `openmpi`): use `--flag
+  mpi-hs:openmpi-macports`
+- MPICH on Ubuntu Linux (package `openmpi-dev`): use `--flag
+  mpi-hs:mpich-ubuntu`
+- MPICH on macOS with MacPorts (package `openmpi`): use `--flag
+  mpi-hs:mpich-macports`
+
+For example, using the MPICH MPI implementation installed via MacPorts
+on macOS, you build `mpi-hs` like this:
+
+```sh
+stack build --flag mpi-hs:mpich-macports
+```
+
+In the general case, if your MPI library/operating system combination
+is not supported by a Cabal flag, you need to describe the location of
+your MPI library in `stack.yaml`. This might look like:
 
 ```yaml
 extra-include-dirs:
@@ -105,21 +127,7 @@ extra-lib-dirs:
   - /usr/lib/openmpi/lib
 ```
 
-On MacOS, one MPI package is the [MacPorts](https://www.macports.org)
-package `openmpi`. It installs into `/opt/local/include/openmpi-mp`,
-`/opt/local/lib/openmpi-mp`, and `/opt/local/bin`. You need to ensure
-that these settings are present in `stack.yaml`:
-
-```yaml
-extra-include-dirs:
-  - /opt/local/include/openmpi-mp
-extra-lib-dirs:
-  - /opt/local/lib/openmpi-mp
-```
-
-Both these settings are there by default.
-
-### Testing the MPI installation
+### Testing the MPI installation with a C program
 
 To test your MPI installation independently of using Haskell, copy the
 example MPI C code into a file `mpi-example.c`, and run these commands:
@@ -160,26 +168,8 @@ To run the example provided in `src/Main.hs`:
 
 ```
 stack build
-mpirun-openmpi-mp -np 3 stack exec example && echo SUCCESS || echo FAILURE
+mpiexec -n 3 stack exec example
 ```
-
-With OpenMPI, and when running on a single node (e.g. on a laptop or a
-workstation), these additional `mpirun` options might be useful:
-
-```
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec example && echo SUCCESS || echo FAILURE
-```
-
-The options `--mca btl self,vader` enable the shared memory byte
-transfer layer (called "vader"), and also disable any network
-communication.
-
-The option `--oversubscribe` lets you run as many MPI processes on the
-local node as you want, without being limited by the physical number
-of cores. This is convenient for testing.
-
-Other MPI implementations should have equivalent (but differently
-named) options.
 
 ### Running the tests
 
@@ -187,6 +177,9 @@ There are four test cases provided in `tests`:
 
 ```
 stack build --test --no-run-tests
+mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
+mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
+
 mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test && echo SUCCESS || echo FAILURE
 mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-binary/mpi-test-binary && echo SUCCESS || echo FAILURE
 mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize && echo SUCCESS || echo FAILURE

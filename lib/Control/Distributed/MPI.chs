@@ -248,7 +248,6 @@ import Data.IORef
 import Data.Ix
 import qualified Data.Monoid as Monoid
 import qualified Data.Semigroup as Semigroup
-import qualified Data.Store as Store
 import Data.Version
 import Foreign
 import Foreign.C.String
@@ -372,8 +371,6 @@ peekComm ptr =
 -- | The result of comparing two MPI communicator (see 'commCompare').
 {#enum ComparisonResult {} deriving (Eq, Ord, Read, Show, Generic)#}
 
-instance Store.Store ComparisonResult
-
 
 
 -- | A newtype wrapper describing the size of a message. Use 'toCount'
@@ -387,8 +384,6 @@ instance Read Count where
 
 instance Show Count where
   showsPrec p (Count c) = showsPrec p c
-
-instance Store.Store Count
 
 -- | Convert an integer to a count.
 toCount :: Integral i => i -> Count
@@ -483,8 +478,6 @@ instance Ix Rank where
     | otherwise   = indexError b i "MPI.Rank"
   inRange (Rank rmin, Rank rmax) (Rank r) = rmin <= r && r <= rmax
 
-instance Store.Store Rank
-
 -- | Convert an enum to a rank.
 toRank :: Enum e => e -> Rank
 toRank e = Rank (fromIntegral (fromEnum e))
@@ -573,8 +566,6 @@ getTag (Status fst) =
 newtype Tag = Tag CInt
   deriving (Eq, Ord, Read, Show, Generic, Enum, Num, Storable)
 
-instance Store.Store Tag
-
 -- | Convert an enum to a tag.
 toTag :: Enum e => e -> Tag
 toTag e = Tag (fromIntegral (fromEnum e))
@@ -605,8 +596,6 @@ unitTag = toTag ()
 --   multi-threaded, and different threads might call MPI at the same
 --   time
 {#enum ThreadSupport {} deriving (Eq, Ord, Read, Show, Generic)#}
-
-instance Store.Store ThreadSupport
 
 -- | When MPI is initialized with this library, then it will remember
 -- the provided level of thread support. (This might be less than the
