@@ -10,7 +10,7 @@
 * [Azure
   Pipelines](https://dev.azure.com/schnetter/mpi-hs/_build):
   Build Status [![Build
-  Status](https://dev.azure.com/schnetter/mpi-hs/_apis/build/status/eschnett.mpi-hs?branchName=master)](https://dev.azure.com/schnetter/mpi-hs/_build/latest?definitionId=1&branchName=master)
+  Status](https://dev.azure.com/schnetter/mpi-hs/_apis/build/status/eschnett.mpi-hs?branchName=master)](https://dev.azure.com/schnetter/mpi-hs/_build/latest&branchName=master)
 
 
 
@@ -28,18 +28,19 @@ InfiniBand.
 This library `mpi-hs` provides Haskell bindings for MPI. It is based
 on ideas taken from
 [haskell-mpi](https://github.com/bjpop/haskell-mpi),
-[Boost.MPI](https://www.boost.org/doc/libs/1_64_0/doc/html/mpi.html),
-and [MPI for Python](https://mpi4py.readthedocs.io/en/stable/).
+[Boost.MPI](https://www.boost.org/doc/libs/1_64_0/doc/html/mpi.html)
+for C++, and [MPI for
+Python](https://mpi4py.readthedocs.io/en/stable/).
 
 `mpi-hs` provides two API levels: A low-level API gives rather direct
-access to the MPI API, apart from certain "reasonable" mappings from C
-to Haskell (e.g. output arguments that are in C stored to a pointer
-are in Haskell regular return values). A high-level API simplifies
-exchanging arbitrary values that can be serialized.
+access to the actual MPI API, apart from certain "reasonable" mappings
+from C to Haskell (e.g. output arguments that are in C stored via a
+pointer are in Haskell regular return values). A high-level API
+simplifies exchanging arbitrary values that can be serialized.
 
 
 
-## Example
+## Programming Example
 
 This is a typical MPI C code:
 ```C
@@ -59,15 +60,15 @@ int main(int argc, char** argv) {
 
 The Haskell equivalent looks like this:
 ```Haskell
-import Control.Distributed.MPI as MPI
+import qualified Control.Distributed.MPI as MPI
 
 main :: IO ()
-main =
-  do MPI.init
-     rank <- MPI.commRank MPI.commWorld
-     size <- MPI.commSize MPI.commWorld
-     putStrLn $ "This is process " ++ show rank ++ " of " ++ show size
-     MPI.finalize
+main = do
+  MPI.init
+  rank <- MPI.commRank MPI.commWorld
+  size <- MPI.commSize MPI.commWorld
+  putStrLn $ "This is process " ++ show rank ++ " of " ++ show size
+  MPI.finalize
 ```
 
 
@@ -104,9 +105,9 @@ location:
   mpi-hs:openmpi-ubuntu`
 - OpenMPI on macOS with MacPorts (package `openmpi`): use `--flag
   mpi-hs:openmpi-macports`
-- MPICH on Ubuntu Linux (package `openmpi-dev`): use `--flag
+- MPICH on Ubuntu Linux (package `mpich-dev`): use `--flag
   mpi-hs:mpich-ubuntu`
-- MPICH on macOS with MacPorts (package `openmpi`): use `--flag
+- MPICH on macOS with MacPorts (package `mpich`): use `--flag
   mpi-hs:mpich-macports`
 
 For example, using the MPICH MPI implementation installed via MacPorts
@@ -133,9 +134,9 @@ To test your MPI installation independently of using Haskell, copy the
 example MPI C code into a file `mpi-example.c`, and run these commands:
 
 ```sh
-cc -I/usr/lib/openmpi/include -c mpi-example.c
-cc -o mpi-example mpi-example.o -L/usr/lib/openmpi/lib -lmpi
-mpirun -np 3 ./mpi-example
+mpicc -c mpi-example.c
+mpicc -o mpi-example mpi-example.o
+mpiexec -n 3 ./mpi-example
 ```
 
 All three commands must complete without error, and the last command
@@ -147,9 +148,9 @@ This is process 1 of 3
 This is process 2 of 3
 ```
 
-where the order in which the lines are printed can be random. (The
-output might even be jumbled, i.e. the characters of the three lines
-might be mixed up.)
+where the lines will be output in a random order. (The output might
+even be jumbled, i.e. the characters in these three lines might be
+mixed up.)
 
 If these commands do not work, then this needs to be corrected before
 `mpi-hs` can work. If additional compiler options or libraries are
@@ -173,16 +174,26 @@ mpiexec -n 3 stack exec example
 
 ### Running the tests
 
-There are four test cases provided in `tests`:
+There are two test cases provided in `tests`. The first (`mpi-test`)
+tests the low-level API, the second (`mpi-test-storable`) tests the
+high-level API:
 
 ```
 stack build --test --no-run-tests
 mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
 mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
-
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test && echo SUCCESS || echo FAILURE
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-binary/mpi-test-binary && echo SUCCESS || echo FAILURE
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-serialize/mpi-test-serialize && echo SUCCESS || echo FAILURE
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable && echo SUCCESS || echo FAILURE
-mpirun-openmpi-mp -np 3 --mca btl self,vader --oversubscribe stack exec -- $(stack path --dist-dir)/build/mpi-test-store/mpi-test-store && echo SUCCESS || echo FAILURE
 ```
+
+
+
+## Related packages
+
+There are three companion packages that provide the same high-level
+API via different serialization packages. These are separate packages
+to reduce the number of dependencies of `mpi-hs`:
+- `mpi-hs-binary`, based on `Data.Binary` from
+  [`binary`](https://hackage.haskell.org/package/binary)
+- `mpi-hs-serialize`, based on `Data.Serialize` from
+  [`cereal`](https://hackage.haskell.org/package/cereal)
+- `mpi-hs-store`, based on `Data.Store` from
+  [`store`](https://hackage.haskell.org/package/store)

@@ -70,7 +70,7 @@ ghc-options:
 
 library:
   dependencies:
-    - base >=4 && <5            # tested with 4.11 and 4.12
+    - base >=4 && <5            # tested with 4.11, 4.12, 4.13
     - bytestring
     - monad-loops
   build-tools:
@@ -124,7 +124,6 @@ executables:
     main: Main.hs
     dependencies:
       - base
-      - binary
       - mpi-hs
     ghc-options:
       - -rtsopts
