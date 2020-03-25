@@ -7,10 +7,9 @@
   package and documentation
 * [Stackage](https://www.stackage.org/package/mpi-hs): Stackage
   snapshots
-* [Azure
-  Pipelines](https://dev.azure.com/schnetter/mpi-hs/_build):
+* [Azure Pipelines](https://dev.azure.com/schnetter/mpi-hs/_build):
   Build Status [![Build
-  Status](https://dev.azure.com/schnetter/mpi-hs/_apis/build/status/eschnett.mpi-hs?branchName=master)](https://dev.azure.com/schnetter/mpi-hs/_build/latest&branchName=master)
+  Status](https://dev.azure.com/schnetter/mpi-hs/_apis/build/status/eschnett.mpi-hs?branchName=master)](https://dev.azure.com/schnetter/mpi-hs/_build/latest?definitionId=8&branchName=master)
 
 
 
