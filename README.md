@@ -16,7 +16,7 @@
 
 ## Overview
 
-MPI (the Message Passing Interface) is widely used standard for
+MPI (the Message Passing Interface) is a widely used standard for
 distributed-memory programming on HPC (High Performance Computing)
 systems. MPI allows exchanging data (_messages_) between programs
 running in parallel. There are several high-quality open source MPI
@@ -186,6 +186,7 @@ mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-
 
 
 
+<!---
 ## Related packages
 
 There are three companion packages that provide the same high-level
@@ -197,3 +198,4 @@ to reduce the number of dependencies of `mpi-hs`:
   [`cereal`](https://hackage.haskell.org/package/cereal)
 - `mpi-hs-store`, based on `Data.Store` from
   [`store`](https://hackage.haskell.org/package/store)
+-->
