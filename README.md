@@ -186,16 +186,15 @@ mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-
 
 
 
-<!---
 ## Related packages
 
 There are three companion packages that provide the same high-level
 API via different serialization packages. These are separate packages
 to reduce the number of dependencies of `mpi-hs`:
-- `mpi-hs-binary`, based on `Data.Binary` from
-  [`binary`](https://hackage.haskell.org/package/binary)
-- `mpi-hs-serialize`, based on `Data.Serialize` from
-  [`cereal`](https://hackage.haskell.org/package/cereal)
-- `mpi-hs-store`, based on `Data.Store` from
-  [`store`](https://hackage.haskell.org/package/store)
--->
+- [`mpi-hs-binary`](https://github.com/eschnett/mpi-hs-binary), based
+  on `Data.Binary` in the
+  [`binary`](https://hackage.haskell.org/package/binary) package
+- `mpi-hs-serialize`, based on `Data.Serialize` in the
+  [`cereal`](https://hackage.haskell.org/package/cereal) package
+- `mpi-hs-store`, based on `Data.Store` in the
+  [`store`](https://hackage.haskell.org/package/store) package

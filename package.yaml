@@ -63,6 +63,7 @@ extra-source-files:
   - README.md
   - package.yaml
   - stack.yaml
+  - stack.yaml.lock
   - c/include/mpihs.h
   - c/src/mpihs.c
 

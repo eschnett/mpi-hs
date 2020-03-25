@@ -20,7 +20,7 @@
 
 -- | Module: Control.Distributed.MPI
 -- Description: MPI bindings for Haskell
--- Copyright: (C) 2018 Erik Schnetter
+-- Copyright: (C) 2018, 2019, 2020 Erik Schnetter
 -- License: Apache-2.0
 -- Maintainer: Erik Schnetter <schnetter@gmail.com>
 -- Stability: experimental
