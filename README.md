@@ -226,7 +226,9 @@ to reduce the number of dependencies of `mpi-hs`:
 - [`mpi-hs-binary`](https://github.com/eschnett/mpi-hs-binary), based
   on `Data.Binary` in the
   [`binary`](https://hackage.haskell.org/package/binary) package
-- `mpi-hs-serialize`, based on `Data.Serialize` in the
+- [`mpi-hs-serialize`](https://github.com/eschnett/mpi-hs-serialize),
+  based on `Data.Serialize` in the
   [`cereal`](https://hackage.haskell.org/package/cereal) package
-- `mpi-hs-store`, based on `Data.Store` in the
+- [`mpi-hs-store`](https://github.com/eschnett/mpi-hs-store), based on
+  `Data.Store` in the
   [`store`](https://hackage.haskell.org/package/store) package

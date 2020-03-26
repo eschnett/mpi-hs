@@ -153,19 +153,6 @@ executables:
       - -threaded
       - -with-rtsopts=-N
 
-benchmarks:
-  mpi-hs-benchmarks:
-    source-dirs: bench
-    main: Main.hs
-    dependencies:
-      - base
-      - mpi-hs
-      - criterion
-    ghc-options:
-      - -rtsopts
-      - -threaded
-      - -with-rtsopts=-N
-
 tests:
   mpi-test:
     source-dirs: tests/mpi

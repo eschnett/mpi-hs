@@ -1,27 +1,29 @@
-# This is the complex Azure configuration, which is intended for use
-# on open source libraries which need compatibility across multiple GHC
-# versions, must work with cabal-install, and should be
-# cross-platform. For more information and other options, see:
-#
-# https://docs.haskellstack.org/en/stable/azure_ci/
-#
-# For better organization, you split various jobs into seprate parts
-# and each of them are controlled via individual file.
-jobs:
-- template: ./.azure/azure-linux-template.yml
-  parameters:
-    name: Linux
-    vmImage: ubuntu-16.04
-    os: linux
+# Choose an agent virtual image
+pool:
+  vmImage: ubuntu-16.04
+container:
+  image: eschnett/mpi-hs
 
-# - template: ./.azure/azure-osx-template.yml
-#   parameters:
-#     name: macOS
-#     vmImage: macOS-10.14
-#     os: osx
-# 
-# - template: ./.azure/azure-windows-template.yml
-#   parameters:
-#    name: Windows
-#    vmImage: vs2017-win2016
-#    os: windows
+steps:
+- script: |
+    set -euxo pipefail
+    git clone https://github.com/eschnett/mpi-hs.git
+  displayName: Download package
+- script: |
+    set -euxo pipefail
+    cd mpi-hs
+    stack build --flag mpi-hs:mpich-macports --test --no-run-tests --haddock --no-haddock-deps
+  displayName: Build package
+- script: |
+    set -euxo pipefail
+    cd mpi-hs
+    mpiexec stack exec version
+    mpiexec -n 3 stack exec example1
+    mpiexec -n 3 stack exec example2
+  displayName: Run examples
+- script: |
+    set -euxo pipefail
+    cd mpi-hs
+    mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
+    mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
+  displayName: Run tests
