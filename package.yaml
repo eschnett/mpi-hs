@@ -4,6 +4,7 @@ github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
 maintainer: "Erik Schnetter <schnetter@gmail.com>"
+copyright: "2018, 2019, 2020 Erik Schnetter <schnetter@gmail.com>"
 category: Distributed Computing
 synopsis: MPI bindings for Haskell
 description: |
@@ -121,9 +122,29 @@ when:
       - mpich
 
 executables:
-  example:
+  version:
     source-dirs: src
-    main: Main.hs
+    main: version.hs
+    dependencies:
+      - base
+      - mpi-hs
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+  example1:
+    source-dirs: src
+    main: example1.hs
+    dependencies:
+      - base
+      - mpi-hs
+    ghc-options:
+      - -rtsopts
+      - -threaded
+      - -with-rtsopts=-N
+  example2:
+    source-dirs: src
+    main: example2.hs
     dependencies:
       - base
       - mpi-hs

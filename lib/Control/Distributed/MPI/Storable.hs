@@ -68,13 +68,17 @@ module Control.Distributed.MPI.Storable
 
     -- ** Collective (blocking)
   , barrier
+  , bcast
   , bcastRecv
   , bcastSend
+  , bcastSend_
 
     -- ** Collective (non-blocking)
   , ibarrier
+  , ibcast
   , ibcastRecv
   , ibcastSend
+  , ibcastSend_
   ) where
 
 import Prelude hiding (init)
@@ -85,6 +89,7 @@ import Control.Monad
 import Control.Monad.Loops
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Unsafe as B
+import Data.Maybe
 import Data.Typeable
 import Foreign
 import Foreign.C.Types
@@ -322,6 +327,21 @@ wait_ req = snd <$> wait req
 
 
 -- | Broadcast a message from one process (the "root") to all other
+-- processes in the communicator. The send object must be present
+-- (`Just`) on the root, and is ignored on all non-root processes.
+bcast :: CanSerialize a
+      => Maybe a
+      -> Rank
+      -> Comm
+      -> IO a
+bcast sendobj root comm =
+  do rank <- MPI.commRank comm
+     if rank == root
+       then do mpiAssert (isJust sendobj) "bcast: expected send object on root"
+               bcastSend (fromJust sendobj) root comm
+       else bcastRecv root comm
+
+-- | Broadcast a message from one process (the "root") to all other
 -- processes in the communicator. Call this function on all non-root
 -- processes. Call 'bcastSend' instead on the root process.
 bcastRecv :: CanSerialize a
@@ -345,12 +365,12 @@ bcastRecv root comm =
 -- | Broadcast a message from one process (the "root") to all other
 -- processes in the communicator. Call this function on the root
 -- process. Call 'bcastRecv' instead on all non-root processes.
-bcastSend :: CanSerialize a
-          => a
-          -> Rank
-          -> Comm
-          -> IO ()
-bcastSend sendobj root comm =
+bcastSend_ :: CanSerialize a
+           => a
+           -> Rank
+           -> Comm
+           -> IO ()
+bcastSend_ sendobj root comm =
   do rank <- MPI.commRank comm
      mpiAssert (rank == root) "bcastSend: expected rank == root"
      sendbuf <- serialize sendobj
@@ -360,6 +380,42 @@ bcastSend sendobj root comm =
      whileM_ (not <$> MPI.test_ lenreq) yield
      req <- MPI.ibcast sendbuf root comm
      whileM_ (not <$> MPI.test_ req) yield
+
+-- | Broadcast a message from one process (the "root") to all other
+-- processes in the communicator. Call this function on the root
+-- process. Call 'bcastRecv' instead on all non-root processes.
+bcastSend :: CanSerialize a
+          => a
+          -> Rank
+          -> Comm
+          -> IO a
+bcastSend sendobj root comm =
+  do bcastSend_ sendobj root comm
+     return sendobj
+
+-- | Begin a barrier. Call 'test' or 'wait' to finish the
+-- communication.
+ibarrier :: Comm
+         -> IO (Request ())
+ibarrier comm =
+  do result <- newEmptyMVar
+     _ <- forkIO $
+       do req <- MPI.ibarrier comm
+          whileM_ (not <$> MPI.test_ req) yield
+          putMVar result (Status MPI.anySource MPI.anyTag, ())
+     return (Request result)
+
+ibcast :: CanSerialize a
+       => Maybe a
+       -> Rank
+       -> Comm
+       -> IO (Request a)
+ibcast sendobj root comm =
+  do rank <- MPI.commRank comm
+     if rank == root
+       then do mpiAssert (isJust sendobj) "ibcast: expected send object on root"
+               ibcastSend (fromJust sendobj) root comm
+       else ibcastRecv root comm
 
 ibcastRecv :: CanSerialize a
            => Rank
@@ -376,22 +432,22 @@ ibcastSend :: CanSerialize a
            => a
            -> Rank
            -> Comm
-           -> IO (Request ())
+           -> IO (Request a)
 ibcastSend sendobj root comm =
   do result <- newEmptyMVar
      _ <- forkIO $
-       do bcastSend sendobj root comm
-          putMVar result (Status root MPI.anyTag, ())
+       do bcastSend_ sendobj root comm
+          putMVar result (Status root MPI.anyTag, sendobj)
      return (Request result)
 
--- | Begin a barrier. Call 'test' or 'wait' to finish the
--- communication.
-ibarrier :: Comm
-         -> IO (Request ())
-ibarrier comm =
+ibcastSend_ :: CanSerialize a
+            => a
+            -> Rank
+            -> Comm
+            -> IO (Request ())
+ibcastSend_ sendobj root comm =
   do result <- newEmptyMVar
      _ <- forkIO $
-       do req <- MPI.ibarrier comm
-          whileM_ (not <$> MPI.test_ req) yield
-          putMVar result (Status MPI.anySource MPI.anyTag, ())
+       do bcastSend_ sendobj root comm
+          putMVar result (Status root MPI.anyTag, ())
      return (Request result)

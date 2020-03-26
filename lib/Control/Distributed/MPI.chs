@@ -114,11 +114,13 @@ module Control.Distributed.MPI
   , datatypeInt
   , datatypeLong
   , datatypeLongDouble
+  , datatypeLongLong
   , datatypeLongLongInt
   , datatypeShort
   , datatypeUnsigned
   , datatypeUnsignedChar
   , datatypeUnsignedLong
+  , datatypeUnsignedLongLong
   , datatypeUnsignedShort
   , HasDatatype(..)
 
@@ -680,8 +682,12 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
     { alloca- `Datatype' peekDatatype*
     } -> `()'#}
 
--- | MPI datatype for 'CLLong' (@MPI_LONG_LONG_INT@). (There is no MPI
--- datatype for 'CULLong@).
+-- | MPI datatype for 'CLLong' (@MPI_LONG_LONG@).
+{#fun pure mpihs_get_long_long as datatypeLongLong
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
+
+-- | MPI datatype for 'CLLong' (@MPI_LONG_LONG_INT@).
 {#fun pure mpihs_get_long_long_int as datatypeLongLongInt
     { alloca- `Datatype' peekDatatype*
     } -> `()'#}
@@ -706,6 +712,11 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
     { alloca- `Datatype' peekDatatype*
     } -> `()'#}
 
+-- | MPI datatype for 'CULLong' (@MPI_UNSIGNED_LONG_LONG@).
+{#fun pure mpihs_get_unsigned_long_long as datatypeUnsignedLongLong
+    { alloca- `Datatype' peekDatatype*
+    } -> `()'#}
+
 -- | MPI datatype for 'CUShort' (@MPI_UNSIGNED_SHORT@).
 {#fun pure mpihs_get_unsigned_short as datatypeUnsignedShort
     { alloca- `Datatype' peekDatatype*
@@ -719,13 +730,22 @@ instance HasDatatype CChar where getDatatype = datatypeChar
 instance HasDatatype CDouble where getDatatype = datatypeDouble
 instance HasDatatype CFloat where getDatatype = datatypeFloat
 instance HasDatatype CInt where getDatatype = datatypeInt
-instance HasDatatype CLLong where getDatatype = datatypeLongLongInt
+instance HasDatatype CLLong where getDatatype = datatypeLongLong
 instance HasDatatype CLong where getDatatype = datatypeLong
 instance HasDatatype CShort where getDatatype = datatypeShort
 instance HasDatatype CUChar where getDatatype = datatypeUnsignedChar
 instance HasDatatype CUInt where getDatatype = datatypeUnsigned
+instance HasDatatype CULLong where getDatatype = datatypeUnsignedLongLong
 instance HasDatatype CULong where getDatatype = datatypeUnsignedLong
 instance HasDatatype CUShort where getDatatype = datatypeUnsignedShort
+instance HasDatatype Int8 where getDatatype = datatypeChar
+instance HasDatatype Int16 where getDatatype = datatypeShort
+instance HasDatatype Int32 where getDatatype = datatypeInt
+instance HasDatatype Int64 where getDatatype = datatypeLongLong
+instance HasDatatype Word8 where getDatatype = datatypeByte
+instance HasDatatype Word16 where getDatatype = datatypeUnsignedShort
+instance HasDatatype Word32 where getDatatype = datatypeUnsigned
+instance HasDatatype Word64 where getDatatype = datatypeUnsignedLongLong
 
 
 

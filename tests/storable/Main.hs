@@ -190,13 +190,9 @@ collective = testGroup "collective"
   [ testCase "barrier" $
     do MPI.barrier MPI.commWorld
   , testCase "bcast" $
-    do rank <- MPI.commRank MPI.commWorld
-       let sendmsg :: FixedString = "Hello, World!"
+    do let sendmsg :: FixedString = "Hello, World!"
        recvmsg :: FixedString <-
-         if rank == MPI.rootRank
-         then do MPI.bcastSend sendmsg MPI.rootRank MPI.commWorld
-                 return sendmsg
-         else do MPI.bcastRecv MPI.rootRank MPI.commWorld
+         MPI.bcast (Just sendmsg) MPI.rootRank MPI.commWorld
        recvmsg == sendmsg @? ""
   ]
 
@@ -208,14 +204,9 @@ collectiveNonBlocking = testGroup "collective non-blocking"
     do req <- MPI.ibarrier MPI.commWorld
        MPI.wait_ req
   , testCase "bcast" $
-    do rank <- MPI.commRank MPI.commWorld
-       let sendmsg :: FixedString = "Hello, World!"
+    do let sendmsg :: FixedString = "Hello, World!"
        recvmsg :: FixedString <-
-         if rank == MPI.rootRank
-         then do req <- MPI.ibcastSend sendmsg MPI.rootRank MPI.commWorld
-                 MPI.wait_ req
-                 return sendmsg
-         else do req <- MPI.ibcastRecv MPI.rootRank MPI.commWorld
-                 MPI.wait_ req
+         do req <- MPI.ibcast (Just sendmsg) MPI.rootRank MPI.commWorld
+            MPI.wait_ req
        recvmsg == sendmsg @? ""
   ]

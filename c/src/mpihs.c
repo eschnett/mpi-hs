@@ -23,6 +23,7 @@ void mpihs_get_long(MPI_Datatype *datatype) { *datatype = MPI_LONG; }
 void mpihs_get_long_double(MPI_Datatype *datatype) {
   *datatype = MPI_LONG_DOUBLE;
 }
+void mpihs_get_long_long(MPI_Datatype *datatype) { *datatype = MPI_LONG_LONG; }
 void mpihs_get_long_long_int(MPI_Datatype *datatype) {
   *datatype = MPI_LONG_LONG_INT;
 }
@@ -33,6 +34,9 @@ void mpihs_get_unsigned_char(MPI_Datatype *datatype) {
 }
 void mpihs_get_unsigned_long(MPI_Datatype *datatype) {
   *datatype = MPI_UNSIGNED_LONG;
+}
+void mpihs_get_unsigned_long_long(MPI_Datatype *datatype) {
+  *datatype = MPI_UNSIGNED_LONG_LONG;
 }
 void mpihs_get_unsigned_short(MPI_Datatype *datatype) {
   *datatype = MPI_UNSIGNED_SHORT;

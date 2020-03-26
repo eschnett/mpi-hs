@@ -39,7 +39,7 @@ simplifies exchanging arbitrary values that can be serialized.
 
 
 
-## Programming Example
+## Example
 
 This is a typical MPI C code:
 ```C
@@ -52,6 +52,9 @@ int main(int argc, char** argv) {
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
   printf("This is process %d of %d\n", rank, size);
+  int msg = rank;
+  MPI_Bcast(&msg, 1, MPI_INT, 0, MPI_COMM_WORLD):
+  printf("Process %d says hi\n", msg);
   MPI_Finalize();
   return 0;
 }
@@ -59,7 +62,11 @@ int main(int argc, char** argv) {
 
 The Haskell equivalent looks like this:
 ```Haskell
+{-# LANGUAGE TypeApplications #-}
+
 import qualified Control.Distributed.MPI as MPI
+import Foreign
+import Foreign.C.Types
 
 main :: IO ()
 main = do
@@ -67,7 +74,31 @@ main = do
   rank <- MPI.commRank MPI.commWorld
   size <- MPI.commSize MPI.commWorld
   putStrLn $ "This is process " ++ show rank ++ " of " ++ show size
+  let msg = MPI.fromRank rank
+  buf <- mallocForeignPtr @CInt
+  withForeignPtr buf $ \ptr -> poke ptr msg
+  MPI.bcast (buf, 1::Int) MPI.rootRank MPI.commWorld
+  msg' <- withForeignPtr buf peek
+  putStrLn $ "Process " ++ show msg' ++ " says hi"
   MPI.finalize
+```
+
+The high-level API simplifies exchanging data; no need to allocate a
+buffer nor to use poke or peek:
+```
+{-# LANGUAGE TypeApplications #-}
+
+import qualified Control.Distributed.MPI as MPI
+import qualified Control.Distributed.MPI.Storable as MPI
+
+main :: IO ()
+main = MPI.mainMPI $ do
+  rank <- MPI.commRank MPI.commWorld
+  size <- MPI.commSize MPI.commWorld
+  putStrLn $ "This is process " ++ show rank ++ " of " ++ show size
+  let msg = MPI.fromRank rank :: Int
+  msg' <- MPI.bcast (Just msg) MPI.rootRank MPI.commWorld
+  putStrLn $ "Process " ++ show msg' ++ " says hi"
 ```
 
 
@@ -164,11 +195,13 @@ additional libraries; see `extra-libraries` there).
 
 ### Running the example
 
-To run the example provided in `src/Main.hs`:
+To run the example provided in the `src` directory:
 
 ```
 stack build
-mpiexec -n 3 stack exec example
+mpiexec stack exec versionn
+mpiexec -n 3 stack exec example1
+mpiexec -n 3 stack exec example2
 ```
 
 ### Running the tests

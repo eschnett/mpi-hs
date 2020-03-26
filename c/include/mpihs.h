@@ -35,11 +35,13 @@ void mpihs_get_float(MPI_Datatype *datatype);
 void mpihs_get_int(MPI_Datatype *datatype);
 void mpihs_get_long(MPI_Datatype *datatype);
 void mpihs_get_long_double(MPI_Datatype *datatype);
+void mpihs_get_long_long(MPI_Datatype *datatype);
 void mpihs_get_long_long_int(MPI_Datatype *datatype);
 void mpihs_get_short(MPI_Datatype *datatype);
 void mpihs_get_unsigned(MPI_Datatype *datatype);
 void mpihs_get_unsigned_char(MPI_Datatype *datatype);
 void mpihs_get_unsigned_long(MPI_Datatype *datatype);
+void mpihs_get_unsigned_long_long(MPI_Datatype *datatype);
 void mpihs_get_unsigned_short(MPI_Datatype *datatype);
 
 // Op
