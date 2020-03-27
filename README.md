@@ -129,13 +129,15 @@ For convenience, this package offers Cabal flags to handle several
 common cases where the MPI library is not installed in a standard
 location:
 
-- OpenMPI on Debian Linux (package `openmpi-dev`): use `--flag
+- OpenMPI on Debian Linux (package `libopenmpi-dev`): use `--flag
   mpi-hs:openmpi-debian`
-- OpenMPI on Ubuntu Linux (package `openmpi-dev`): use `--flag
+- OpenMPI on Ubuntu Linux (package `libopenmpi-dev`): use `--flag
   mpi-hs:openmpi-ubuntu`
 - OpenMPI on macOS with MacPorts (package `openmpi`): use `--flag
   mpi-hs:openmpi-macports`
-- MPICH on Ubuntu Linux (package `mpich-dev`): use `--flag
+- MPICH on Debian Linux (package `libmpich-dev`): use `--flag
+  mpi-hs:mpich-debian`
+- MPICH on Ubuntu Linux (package `libmpich-dev`): use `--flag
   mpi-hs:mpich-ubuntu`
 - MPICH on macOS with MacPorts (package `mpich`): use `--flag
   mpi-hs:mpich-macports`
@@ -157,6 +159,11 @@ extra-include-dirs:
 extra-lib-dirs:
   - /usr/lib/openmpi/lib
 ```
+
+To remove default systems paths from the search paths, disable the
+`system-mpi` flag, which is enable by default: `--flag
+mpi-hs:-system-mpi`.
+
 
 ### Testing the MPI installation with a C program
 

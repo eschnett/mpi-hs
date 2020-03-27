@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.7.0.0'
+version: '0.7.1.0'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
@@ -50,6 +50,10 @@ flags:
     description: Use OpenMPI on Ubuntu
     manual: true
     default: false
+  mpich-debian:
+    description: Use MPICH on Debian
+    manual: true
+    default: false
   mpich-macports:
     description: Use MPICH on MacPorts
     manual: true
@@ -58,6 +62,10 @@ flags:
     description: Use MPICH on Ubuntu
     manual: true
     default: false
+  system-mpi:
+    description: Use generic system MPI
+    manual: true
+    default: true
 
 extra-source-files:
   - LICENSE
@@ -85,6 +93,30 @@ library:
     - c/include
 
 when:
+  - condition: flag(mpich-debian)
+    include-dirs:
+      - /usr/include/mpich
+      - /usr/include/x86_64-linux-gnu/mpich
+    extra-lib-dirs:
+      - /usr/lib/x86_64-linux-gnu/lib
+    extra-libraries:
+      - mpich
+  - condition: flag(mpich-macports)
+    include-dirs:
+      - /opt/local/include/mpich-gcc9
+    extra-lib-dirs:
+      - /opt/local/lib/mpich-gcc9
+    extra-libraries:
+      - mpi
+  - condition: flag(mpich-ubuntu)
+    include-dirs:
+      - /usr/include/x86_64-linux-gnu/mpich
+      - /usr/lib/mpich/include
+    extra-lib-dirs:
+      - /usr/lib/mpich/lib
+      - /usr/lib/x86_64-linux-gnu
+    extra-libraries:
+      - mpich
   - condition: flag(openmpi-debian)
     include-dirs:
       - /usr/lib/x86_64-linux-gnu/openmpi/include
@@ -106,22 +138,26 @@ when:
       - /usr/lib/openmpi/lib
     extra-libraries:
       - mpi
-  - condition: flag(mpich-macports)
-    include-dirs:
-      - /opt/local/include/mpich-gcc9
-    extra-lib-dirs:
-      - /opt/local/lib/mpich-gcc9
-    extra-libraries:
-      - mpi
-  - condition: flag(mpich-ubuntu)
-    include-dirs:
-      - /usr/lib/mpich/include
-      - /usr/include/x86_64-linux-gnu/mpich
-    extra-lib-dirs:
-      - /usr/lib/mpich/lib
-      - /usr/lib/x86_64-linux-gnu
-    extra-libraries:
-      - mpich
+  - condition: flag(system-mpi)
+    when:
+      - condition: '!flag(mpich-debian)'
+        when:
+          - condition: '!flag(mpich-macports)'
+            when:
+              - condition: '!flag(mpich-ubuntu)'
+                when:
+                  - condition: '!flag(openmpi-debian)'
+                    when:
+                      - condition: '!flag(openmpi-macports)'
+                        when:
+                          - condition: '!flag(openmpi-ubuntu)'
+                            include-dirs:
+                              - /usr/include/mpich
+                              - /usr/include/x86_64-linux-gnu/mpich
+                            extra-lib-dirs:
+                              - /usr/lib/x86_64-linux-gnu/lib
+                            extra-libraries:
+                              - mpich
 
 executables:
   version:
