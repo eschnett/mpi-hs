@@ -116,8 +116,10 @@ when:
   - condition: flag(mpich-ubuntu)
     include-dirs:
       - /usr/lib/mpich/include
+      - /usr/include/x86_64-linux-gnu/mpich
     extra-lib-dirs:
       - /usr/lib/mpich/lib
+      - /usr/lib/x86_64-linux-gnu
     extra-libraries:
       - mpich
 
