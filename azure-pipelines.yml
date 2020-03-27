@@ -1,10 +1,10 @@
 pool:
-  vmImage: ubuntu-19.10
+  vmImage: ubuntu-18.04
 
 steps:
 - script: |
     sudo apt-get update
-    sudo apt-get install --yes --no-install-recommends build-essential libmpich-dev
+    sudo apt-get install --yes --no-install-recommends libmpich-dev
   displayName: Install system packages
 - script: |
     mkdir -p "$HOME/.local/bin"
@@ -12,17 +12,17 @@ steps:
   displayName: Install Stack
 - script: |
     export PATH="$HOME/.local/bin:$PATH"
-    stack --no-terminal --install-ghc build --test --only-dependencies
+    stack --no-terminal --install-ghc build --flag mpi-hs:mpich-ubuntu --test --only-dependencies
   displayName: Build Dependencies
 - script: |
     export PATH="$HOME/.local/bin:$PATH"
-    stack build --test --no-run-tests --haddock --no-haddock-deps
+    stack --no-terminal build --flag mpi-hs:mpich-ubuntu --test --no-run-tests --haddock --no-haddock-deps
   displayName: Build Package
 - script: |
     set -euxo pipefail
-    mpiexec stack exec version
-    mpiexec -n 3 stack exec example1
-    mpiexec -n 3 stack exec example2
-    mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
-    mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
+    mpiexec stack --no-terminal exec version
+    mpiexec -n 3 stack --no-terminal exec example1
+    mpiexec -n 3 stack --no-terminal exec example2
+    mpiexec -n 3 stack --no-terminal exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
+    mpiexec -n 3 stack --no-terminal exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
   displayName: Run examples and tests
