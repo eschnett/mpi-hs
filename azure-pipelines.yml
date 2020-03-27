@@ -21,8 +21,8 @@ steps:
 - script: |
     set -euxo pipefail
     mpiexec stack --no-terminal exec version
-    mpiexec.mpich -n 3 stack --no-terminal exec example1
-    mpiexec.mpich -n 3 stack --no-terminal exec example2
-    mpiexec.mpich -n 3 stack --no-terminal exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
-    mpiexec.mpich -n 3 stack --no-terminal exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
+    mpiexec -n 3 stack --no-terminal exec example1
+    mpiexec -n 3 stack --no-terminal exec example2
+    mpiexec -n 3 stack --no-terminal exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
+    mpiexec -n 3 stack --no-terminal exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
   displayName: Run examples and tests
