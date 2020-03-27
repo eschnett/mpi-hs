@@ -1,29 +1,27 @@
-# Choose an agent virtual image
 pool:
-  vmImage: ubuntu-16.04
-container:
-  image: eschnett/mpi-hs
+  vmImage: ubuntu-latest
 
 steps:
 - script: |
-    set -euxo pipefail
-    git clone https://github.com/eschnett/mpi-hs.git
-  displayName: Download package
+    apt-get install libmpich-dev
+  displayName: Install system packages
+- script: |
+    mkdir -p "$HOME/.local/bin"
+    curl -L https://get.haskellstack.org/stable/linux-x86_64.tar.gz | tar xz --wildcards --strip-components=1 -C "$HOME/.local/bin" '*/stack'
+  displayName: Install Stack
+- script: |
+    export PATH="$HOME/.local/bin:$PATH"
+    stack --no-terminal --install-ghc build --test --only-dependencies
+  displayName: Build Dependencies
+- script: |
+    export PATH="$HOME/.local/bin:$PATH"
+    stack build --test --no-run-tests --haddock --no-haddock-deps
+  displayName: Build Package
 - script: |
     set -euxo pipefail
-    cd mpi-hs
-    stack build --flag mpi-hs:mpich-ubuntu --test --no-run-tests --haddock --no-haddock-deps
-  displayName: Build package
-- script: |
-    set -euxo pipefail
-    cd mpi-hs
     mpiexec stack exec version
     mpiexec -n 3 stack exec example1
     mpiexec -n 3 stack exec example2
-  displayName: Run examples
-- script: |
-    set -euxo pipefail
-    cd mpi-hs
     mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
     mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
-  displayName: Run tests
+  displayName: Run examples and tests

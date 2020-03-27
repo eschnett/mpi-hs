@@ -1,0 +1,29 @@
+# Choose an agent virtual image
+pool:
+  vmImage: ubuntu-16.04
+container:
+  image: eschnett/mpi-hs
+
+steps:
+- script: |
+    set -euxo pipefail
+    git clone https://github.com/eschnett/mpi-hs.git
+  displayName: Download package
+- script: |
+    set -euxo pipefail
+    cd mpi-hs
+    stack build --flag mpi-hs:mpich-ubuntu --test --no-run-tests --haddock --no-haddock-deps
+  displayName: Build package
+- script: |
+    set -euxo pipefail
+    cd mpi-hs
+    mpiexec stack exec version
+    mpiexec -n 3 stack exec example1
+    mpiexec -n 3 stack exec example2
+  displayName: Run examples
+- script: |
+    set -euxo pipefail
+    cd mpi-hs
+    mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test/mpi-test
+    mpiexec -n 3 stack exec -- $(stack path --dist-dir)/build/mpi-test-storable/mpi-test-storable
+  displayName: Run tests
