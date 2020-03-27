@@ -351,7 +351,7 @@ bcastRecv :: CanSerialize a
 bcastRecv root comm =
   do rank <- MPI.commRank comm
      mpiAssert (rank /= root) "bcastRecv: expected rank /= root"
-     lenbuf <- mallocForeignPtr @CLong
+     lenbuf <- mallocForeignPtr @CInt
      lenreq <- MPI.ibcast (lenbuf, 1::Int) root comm
      whileM_ (not <$> MPI.test_ lenreq) yield
      len <- withForeignPtr lenbuf peek
@@ -374,7 +374,7 @@ bcastSend_ sendobj root comm =
   do rank <- MPI.commRank comm
      mpiAssert (rank == root) "bcastSend: expected rank == root"
      sendbuf <- serialize sendobj
-     lenbuf <- mallocForeignPtr @CLong
+     lenbuf <- mallocForeignPtr @CInt
      withForeignPtr lenbuf $ \ptr -> poke ptr (fromIntegral (B.length sendbuf))
      lenreq <- MPI.ibcast (lenbuf, 1::Int) root comm
      whileM_ (not <$> MPI.test_ lenreq) yield
@@ -451,3 +451,33 @@ ibcastSend_ sendobj root comm =
        do bcastSend_ sendobj root comm
           putMVar result (Status root MPI.anyTag, ())
      return (Request result)
+
+-- scatter :: CanSerialize a
+--         => Maybe a
+--         -> Rank
+--         -> Comm
+--         -> IO (Request a)
+-- scatter msendobj root comm =
+--   do rank <- commRank comm
+--      sendbuf <-
+--        if (rank == root)
+--        then do mpiAssert (isJust msendobj)
+--                serialize (fromJust sendobj)
+--        else return nullPtr
+--      lenbuf <- mallocForeignPtr @CInt
+--      withForeignPtr lenbuf $ \ptr -> poke ptr (fromIntegral (B.length sendbuf))
+--      lenreq <- MPI.ibcast (lenbuf, 1::Int) root comm
+--      whileM_ (not <$> MPI.test_ lenreq) yield
+--      req <- MPI.iscatterv sendbuf root comm
+--      whileM_ (not <$> MPI.test_ req) yield
+-- 
+-- scatterRecv :: CanSerialize a
+--             => Rank
+--             -> Comm
+--             -> IO (Request a)
+-- 
+-- scatterSend :: CanSerialize a
+--             => a
+--             -> Rank
+--             -> Comm
+--             -> IO (Request a)

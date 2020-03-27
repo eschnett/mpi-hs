@@ -1736,6 +1736,24 @@ scatter sendbuf recvbuf root comm =
                (castPtr recvptr) recvcount recvdatatype
                root comm
 
+-- -- | Scatter data from the root process to all processes, allowing
+-- -- varying send counts to each process (collective,
+-- -- @[MPI_Scatterv](https://www.open-mpi.org/doc/current/man3/MPI_Scatterv.3.php)@).
+-- -- The MPI datatypes are determined automatically from the buffer
+-- -- pointer types.
+-- scatterv :: (Buffer sb, Buffer rb)
+--          => sb        -- ^ Source buffer (only used on the root process)
+--          -> rb                   -- ^ Destination buffer
+--          -> Rank                 -- ^ Root rank
+--          -> Comm                 -- ^ Communicator
+--          -> IO ()
+-- scatterv sendbuf recvbuf root comm =
+--   withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+--   withPtrLenType recvbuf $ \recvptr recvcount recvdatatype ->
+--   scatterTyped (castPtr sendptr) sendcount senddatatype
+--                (castPtr recvptr) recvcount recvdatatype
+--                root comm
+
 {#fun Send as sendTyped
     { id `Ptr ()'
     , fromCount `Count'
