@@ -12,7 +12,7 @@ steps:
 - script: |
     set -euxo pipefail
     cd mpi-hs
-    stack build --flag mpi-hs:mpich-macports --test --no-run-tests --haddock --no-haddock-deps
+    stack build --flag mpi-hs:mpich-ubuntu --test --no-run-tests --haddock --no-haddock-deps
   displayName: Build package
 - script: |
     set -euxo pipefail
