@@ -38,18 +38,6 @@ description: |
   is an error in this package.
 
 flags:
-  openmpi-debian:
-    description: Use OpenMPI on Debian
-    manual: true
-    default: false
-  openmpi-macports:
-    description: Use OpenMPI on MacPorts
-    manual: true
-    default: false
-  openmpi-ubuntu:
-    description: Use OpenMPI on Ubuntu
-    manual: true
-    default: false
   mpich-debian:
     description: Use MPICH on Debian
     manual: true
@@ -60,6 +48,18 @@ flags:
     default: false
   mpich-ubuntu:
     description: Use MPICH on Ubuntu
+    manual: true
+    default: false
+  openmpi-debian:
+    description: Use OpenMPI on Debian
+    manual: true
+    default: false
+  openmpi-macports:
+    description: Use OpenMPI on MacPorts
+    manual: true
+    default: false
+  openmpi-ubuntu:
+    description: Use OpenMPI on Ubuntu
     manual: true
     default: false
   system-mpi:
