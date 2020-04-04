@@ -153,9 +153,8 @@ when:
                           - condition: '!flag(openmpi-ubuntu)'
                             include-dirs:
                               - /usr/include/mpich
-                              - /usr/include/x86_64-linux-gnu/mpich
                             extra-lib-dirs:
-                              - /usr/lib/x86_64-linux-gnu/lib
+                              - /usr/lib/x86_64-linux-gnu
                             extra-libraries:
                               - mpich
 
