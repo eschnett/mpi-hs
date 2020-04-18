@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.7.1.1'
+version: '0.7.1.2'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
@@ -98,6 +98,7 @@ when:
       - /usr/include/mpich
       - /usr/include/x86_64-linux-gnu/mpich
     extra-lib-dirs:
+      - /usr/lib/x86_64-linux-gnu
       - /usr/lib/x86_64-linux-gnu/lib
     extra-libraries:
       - mpich
@@ -153,8 +154,10 @@ when:
                           - condition: '!flag(openmpi-ubuntu)'
                             include-dirs:
                               - /usr/include/mpich
+                              - /usr/include/x86_64-linux-gnu/mpich
                             extra-lib-dirs:
                               - /usr/lib/x86_64-linux-gnu
+                              - /usr/lib/x86_64-linux-gnu/lib
                             extra-libraries:
                               - mpich
 
