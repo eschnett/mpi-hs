@@ -1,5 +1,5 @@
 name: mpi-hs
-version: '0.7.1.2'
+version: '0.7.2.0'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
@@ -104,9 +104,9 @@ when:
       - mpich
   - condition: flag(mpich-macports)
     include-dirs:
-      - /opt/local/include/mpich-gcc9
+      - /opt/local/include/mpich-mp
     extra-lib-dirs:
-      - /opt/local/lib/mpich-gcc9
+      - /opt/local/lib/mpich-mp
     extra-libraries:
       - mpi
   - condition: flag(mpich-ubuntu)

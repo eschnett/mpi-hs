@@ -254,7 +254,7 @@ import Data.Version
 import Foreign
 import Foreign.C.String
 import Foreign.C.Types
-import GHC.Arr (indexError)
+import GHC.Err (errorWithoutStackTrace)
 import GHC.Generics hiding (Datatype, from, to)
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -471,6 +471,15 @@ instance Read Rank where
 
 instance Show Rank where
   showsPrec p (Rank r) = showsPrec p r
+
+{-# NOINLINE indexError #-}
+indexError :: Show a => (a,a) -> a -> String -> b
+indexError rng i tp =
+  errorWithoutStackTrace
+  (showString "Ix{" . showString tp . showString "}.index: Index " .
+    showParen True (showsPrec 0 i) .
+    showString " out of range " $
+    showParen True (showsPrec 0 rng) "")
 
 instance Ix Rank where
   range (Rank rmin, Rank rmax) = Rank <$> [rmin..rmax]

@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.33.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f2cf4257a32103f47022facfd6a094ae6a3b6fc48338053b6afeb7fc7ec6dc5f
+-- hash: 40051a2fa5a9acbb76076a5a8a95aef681997552d679994fcbe1d8b29474caaf
 
 name:           mpi-hs
 version:        0.7.1.2
@@ -124,9 +124,9 @@ library
         mpich
   if flag(mpich-macports)
     include-dirs:
-        /opt/local/include/mpich-gcc9
+        /opt/local/include/mpich-mp
     extra-lib-dirs:
-        /opt/local/lib/mpich-gcc9
+        /opt/local/lib/mpich-mp
     extra-libraries:
         mpi
   if flag(mpich-ubuntu)
@@ -197,9 +197,9 @@ executable example1
         mpich
   if flag(mpich-macports)
     include-dirs:
-        /opt/local/include/mpich-gcc9
+        /opt/local/include/mpich-mp
     extra-lib-dirs:
-        /opt/local/lib/mpich-gcc9
+        /opt/local/lib/mpich-mp
     extra-libraries:
         mpi
   if flag(mpich-ubuntu)
@@ -270,9 +270,9 @@ executable example2
         mpich
   if flag(mpich-macports)
     include-dirs:
-        /opt/local/include/mpich-gcc9
+        /opt/local/include/mpich-mp
     extra-lib-dirs:
-        /opt/local/lib/mpich-gcc9
+        /opt/local/lib/mpich-mp
     extra-libraries:
         mpi
   if flag(mpich-ubuntu)
@@ -343,9 +343,9 @@ executable version
         mpich
   if flag(mpich-macports)
     include-dirs:
-        /opt/local/include/mpich-gcc9
+        /opt/local/include/mpich-mp
     extra-lib-dirs:
-        /opt/local/lib/mpich-gcc9
+        /opt/local/lib/mpich-mp
     extra-libraries:
         mpi
   if flag(mpich-ubuntu)
@@ -418,9 +418,9 @@ test-suite mpi-test
         mpich
   if flag(mpich-macports)
     include-dirs:
-        /opt/local/include/mpich-gcc9
+        /opt/local/include/mpich-mp
     extra-lib-dirs:
-        /opt/local/lib/mpich-gcc9
+        /opt/local/lib/mpich-mp
     extra-libraries:
         mpi
   if flag(mpich-ubuntu)
@@ -492,9 +492,9 @@ test-suite mpi-test-storable
         mpich
   if flag(mpich-macports)
     include-dirs:
-        /opt/local/include/mpich-gcc9
+        /opt/local/include/mpich-mp
     extra-lib-dirs:
-        /opt/local/lib/mpich-gcc9
+        /opt/local/lib/mpich-mp
     extra-libraries:
         mpi
   if flag(mpich-ubuntu)
