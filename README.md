@@ -206,7 +206,7 @@ To run the example provided in the `src` directory:
 
 ```
 stack build
-mpiexec stack exec versionn
+mpiexec stack exec version
 mpiexec -n 3 stack exec example1
 mpiexec -n 3 stack exec example2
 ```
