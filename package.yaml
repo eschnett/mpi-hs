@@ -77,28 +77,18 @@ library:
     - c/include
 
 when:
-  - condition: flag(mpich) && !flag(openmpi) && !flag(mvapich)
-    then:
-      pkg-config-dependencies:
-        - mpich
-    else:
-      extra-libraries:
-        - mpi
-  - condition: flag(openmpi) && !flag(mpich) && !flag(mvapich)
-    then:
-      pkg-config-dependencies:
-        - ompi
-    else:
-      extra-libraries:
-        - mpi
-  - condition: flag(mvapich) && !flag(mpich) && !flag(openmpi)
-    then:
-      pkg-config-dependencies:
-        - mvapich2
-    else:
-      extra-libraries:
-        - mpi
-  
+  - condition: "flag(mpich)"
+    pkg-config-dependencies:
+      - mpich
+  - condition: "flag(openmpi)"
+    pkg-config-dependencies:
+      - ompi
+  - condition: "flag(mvapich)"
+    pkg-config-dependencies:
+      - mvapich2
+  - condition: "!flag(mvapich) && !flag(mpich) && !flag(openmpi)"
+    extra-libraries:
+      - mpi
 
 executables:
   version:
