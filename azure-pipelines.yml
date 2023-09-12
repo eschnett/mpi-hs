@@ -4,7 +4,7 @@ pool:
 steps:
 - script: |
     sudo apt-get update
-    sudo apt-get install --yes --no-install-recommends libmpich-dev mpich
+    sudo apt-get install --yes --no-install-recommends libmpich-dev mpich libopenmpi-dev openmpi
   displayName: Install system packages
 - script: |
     mkdir -p "$HOME/.local/bin"
