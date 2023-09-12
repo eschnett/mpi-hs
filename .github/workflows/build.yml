@@ -1,0 +1,25 @@
+on: 
+  - pull_request
+  - push
+
+jobs:
+  nix:
+    name: Nixpkgs
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: cachix/install-nix-action@v20
+    - run: |
+        nix flake check -L
+  ubuntu:
+    name: Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: haskell/actions/setup@v2
+      with:
+        ghc-version: "9.4"
+        cabal-version: "latest"
+    - run: DEBIAN_FRONTEND=noninteractive sudo apt update && sudo apt install -y libopenmpi-dev libopenmpi3 openmpi-bin
+    - run: cabal build
+    - run: cabal test
