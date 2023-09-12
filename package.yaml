@@ -38,32 +38,16 @@ description: |
   is an error in this package.
 
 flags:
-  mpich-debian:
-    description: Use MPICH on Debian
+  mpich:
+    description: Use MPICH
     manual: true
     default: false
-  mpich-macports:
-    description: Use MPICH on MacPorts
+  mvapich:
+    description: Use MVAPICH2
     manual: true
     default: false
-  mpich-ubuntu:
-    description: Use MPICH on Ubuntu
-    manual: true
-    default: false
-  openmpi-debian:
-    description: Use OpenMPI on Debian
-    manual: true
-    default: false
-  openmpi-macports:
-    description: Use OpenMPI on MacPorts
-    manual: true
-    default: false
-  openmpi-ubuntu:
-    description: Use OpenMPI on Ubuntu
-    manual: true
-    default: false
-  system-mpi:
-    description: Use generic system MPI
+  openmpi:
+    description: Use OpenMPI
     manual: true
     default: true
 
@@ -93,73 +77,28 @@ library:
     - c/include
 
 when:
-  - condition: flag(mpich-debian)
-    include-dirs:
-      - /usr/include/mpich
-      - /usr/include/x86_64-linux-gnu/mpich
-    extra-lib-dirs:
-      - /usr/lib/x86_64-linux-gnu
-      - /usr/lib/x86_64-linux-gnu/lib
-    extra-libraries:
-      - mpich
-  - condition: flag(mpich-macports)
-    include-dirs:
-      - /opt/local/include/mpich-mp
-    extra-lib-dirs:
-      - /opt/local/lib/mpich-mp
-    extra-libraries:
-      - mpi
-  - condition: flag(mpich-ubuntu)
-    include-dirs:
-      - /usr/include/x86_64-linux-gnu/mpich
-      - /usr/lib/mpich/include
-    extra-lib-dirs:
-      - /usr/lib/mpich/lib
-      - /usr/lib/x86_64-linux-gnu
-    extra-libraries:
-      - mpich
-  - condition: flag(openmpi-debian)
-    include-dirs:
-      - /usr/lib/x86_64-linux-gnu/openmpi/include
-    extra-lib-dirs:
-      - /usr/lib/x86_64-linux-gnu/openmpi/lib
-    extra-libraries:
-      - mpi
-  - condition: flag(openmpi-macports)
-    include-dirs:
-      - /opt/local/include/openmpi-mp
-    extra-lib-dirs:
-      - /opt/local/lib/openmpi-mp
-    extra-libraries:
-      - mpi
-  - condition: flag(openmpi-ubuntu)
-    include-dirs:
-      - /usr/lib/openmpi/include
-    extra-lib-dirs:
-      - /usr/lib/openmpi/lib
-    extra-libraries:
-      - mpi
-  - condition: flag(system-mpi)
-    when:
-      - condition: '!flag(mpich-debian)'
-        when:
-          - condition: '!flag(mpich-macports)'
-            when:
-              - condition: '!flag(mpich-ubuntu)'
-                when:
-                  - condition: '!flag(openmpi-debian)'
-                    when:
-                      - condition: '!flag(openmpi-macports)'
-                        when:
-                          - condition: '!flag(openmpi-ubuntu)'
-                            include-dirs:
-                              - /usr/include/mpich
-                              - /usr/include/x86_64-linux-gnu/mpich
-                            extra-lib-dirs:
-                              - /usr/lib/x86_64-linux-gnu
-                              - /usr/lib/x86_64-linux-gnu/lib
-                            extra-libraries:
-                              - mpich
+  - condition: flag(mpich) && !flag(openmpi) && !flag(mvapich)
+    then:
+      pkg-config-dependencies:
+        - mpich
+    else:
+      extra-libraries:
+        - mpi
+  - condition: flag(openmpi) && !flag(mpich) && !flag(mvapich)
+    then:
+      pkg-config-dependencies:
+        - ompi
+    else:
+      extra-libraries:
+        - mpi
+  - condition: flag(mvapich) && !flag(mpich) && !flag(openmpi)
+    then:
+      pkg-config-dependencies:
+        - mvapich2
+    else:
+      extra-libraries:
+        - mpi
+  
 
 executables:
   version:
