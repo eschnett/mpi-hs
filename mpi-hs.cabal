@@ -92,22 +92,16 @@ library
     , bytestring
     , monad-loops
   default-language: Haskell2010
-  if flag(mpich) && !flag(openmpi) && !flag(mvapich)
+  if flag(mpich)
     pkgconfig-depends:
         mpich
-  else
-    extra-libraries:
-        mpi
-  if flag(openmpi) && !flag(mpich) && !flag(mvapich)
+  if flag(openmpi)
     pkgconfig-depends:
         ompi
-  else
-    extra-libraries:
-        mpi
-  if flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  else
+  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -122,22 +116,16 @@ executable example1
       base
     , mpi-hs
   default-language: Haskell2010
-  if flag(mpich) && !flag(openmpi) && !flag(mvapich)
+  if flag(mpich)
     pkgconfig-depends:
         mpich
-  else
-    extra-libraries:
-        mpi
-  if flag(openmpi) && !flag(mpich) && !flag(mvapich)
+  if flag(openmpi)
     pkgconfig-depends:
         ompi
-  else
-    extra-libraries:
-        mpi
-  if flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  else
+  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -152,22 +140,16 @@ executable example2
       base
     , mpi-hs
   default-language: Haskell2010
-  if flag(mpich) && !flag(openmpi) && !flag(mvapich)
+  if flag(mpich)
     pkgconfig-depends:
         mpich
-  else
-    extra-libraries:
-        mpi
-  if flag(openmpi) && !flag(mpich) && !flag(mvapich)
+  if flag(openmpi)
     pkgconfig-depends:
         ompi
-  else
-    extra-libraries:
-        mpi
-  if flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  else
+  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -182,22 +164,16 @@ executable version
       base
     , mpi-hs
   default-language: Haskell2010
-  if flag(mpich) && !flag(openmpi) && !flag(mvapich)
+  if flag(mpich)
     pkgconfig-depends:
         mpich
-  else
-    extra-libraries:
-        mpi
-  if flag(openmpi) && !flag(mpich) && !flag(mvapich)
+  if flag(openmpi)
     pkgconfig-depends:
         ompi
-  else
-    extra-libraries:
-        mpi
-  if flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  else
+  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -214,22 +190,16 @@ test-suite mpi-test
     , monad-loops
     , mpi-hs
   default-language: Haskell2010
-  if flag(mpich) && !flag(openmpi) && !flag(mvapich)
+  if flag(mpich)
     pkgconfig-depends:
         mpich
-  else
-    extra-libraries:
-        mpi
-  if flag(openmpi) && !flag(mpich) && !flag(mvapich)
+  if flag(openmpi)
     pkgconfig-depends:
         ompi
-  else
-    extra-libraries:
-        mpi
-  if flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  else
+  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -245,21 +215,15 @@ test-suite mpi-test-storable
       base
     , mpi-hs
   default-language: Haskell2010
-  if flag(mpich) && !flag(openmpi) && !flag(mvapich)
+  if flag(mpich)
     pkgconfig-depends:
         mpich
-  else
-    extra-libraries:
-        mpi
-  if flag(openmpi) && !flag(mpich) && !flag(mvapich)
+  if flag(openmpi)
     pkgconfig-depends:
         ompi
-  else
-    extra-libraries:
-        mpi
-  if flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  else
+  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi

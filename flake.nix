@@ -7,10 +7,6 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  nixConfig = {
-    allow-import-from-derivation = "true";
-  };
-
   outputs = { self, nixpkgs, flake-utils }: flake-utils.lib.eachSystem [ "x86_64-linux" ]
     (system:
       let
@@ -22,11 +18,11 @@
       in
       {
         packages = {
-          default = self.packages."${system}".mpi-hs_lmpi;
-          mpi-hs_openmpi = pkgs.haskell.lib.appendConfigureFlags (pkgs.haskellPackages.mpi-hs.override { mpi = pkgs.mpi; }) [ "-fopenmpi" "-f-mpich" "-f-mvapich" ];
-          mpi-hs_mpich = pkgs.haskell.lib.appendConfigureFlags (pkgs.haskellPackages.mpi-hs.override { mpi = pkgs.mpich; }) [ "-fmpich" "-f-openmpi" "-f-mvapich" ];
-          mpi-hs_mvapich = pkgs.haskell.lib.appendConfigureFlags (pkgs.haskellPackages.mpi-hs.override { mpi = pkgs.mvapich; }) [ "-fmvapich" "-f-openmpi" "-f-mpich" ];
-          mpi-hs_lmpi = pkgs.haskell.lib.appendConfigureFlags (pkgs.haskellPackages.mpi-hs.override { mpi = pkgs.mpi; }) [ "-f-mvapich" "-f-openmpi" "-f-mpich" ];
+          default = self.packages."${system}".mpi-hs_openmpi;
+          mpi-hs_openmpi = pkgs.haskellPackages.mpi-hs_openmpi;
+          mpi-hs_mpich = pkgs.haskellPackages.mpi-hs_mpich;
+          mpi-hs_mvapich = pkgs.haskellPackages.mpi-hs_mvapich;
+          mpi-hs_mpi = pkgs.haskellPackages.mpi-hs_mpi;
         };
 
         devShells.default = pkgs.haskellPackages.shellFor {
