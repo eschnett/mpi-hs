@@ -1,2 +1,5 @@
 # Stack uses this directory as scratch space.
 /.stack-work/
+.direnv/
+dist-newstyle/
+result*/

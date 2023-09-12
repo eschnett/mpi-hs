@@ -2,8 +2,9 @@
 # resolver: lts-14.27
 # resolver: lts-15.3
 # resolver: lts-15.16
+# resolver: lts-16.3
 resolver: lts-16.3
-# resolver: nightly-2020-06-29
+# resolver: nightly-2020-06-29.
 
 # User packages to be built.
 packages:
