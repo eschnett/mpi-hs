@@ -3,7 +3,7 @@ version: '0.7.3.0'
 github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
-maintainer: "Erik Schnetter <schnetter@gmail.com>, Phillip Seeber <phillip.seeber@googlemail.com"
+maintainer: "Erik Schnetter <schnetter@gmail.com>, Phillip Seeber <phillip.seeber@googlemail.com>"
 copyright: "2018, 2019, 2020, 2023 Erik Schnetter <schnetter@gmail.com>"
 category: Distributed Computing
 synopsis: MPI bindings for Haskell
