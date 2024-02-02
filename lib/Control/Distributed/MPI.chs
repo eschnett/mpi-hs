@@ -88,7 +88,9 @@ module Control.Distributed.MPI
     Buffer(..)
 
     -- ** Communicators
-  , Comm(..)
+  , Comm
+  , withComm
+  , peekComm
   , ComparisonResult(..)
   , commCompare
   , commRank

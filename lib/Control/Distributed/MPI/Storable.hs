@@ -15,7 +15,7 @@ module Control.Distributed.MPI.Storable
     MPIException(..)
 
     -- ** Communicators
-  , Comm(..)
+  , Comm
   , commSelf
   , commWorld
 
@@ -97,7 +97,7 @@ import qualified Foreign.Storable as Storable
 
 import qualified Control.Distributed.MPI as MPI
 import Control.Distributed.MPI
-  ( Comm(..)
+  ( Comm
   , commSelf
   , commWorld
   , Count(..)
