@@ -108,60 +108,16 @@ main = MPI.mainMPI $ do
 system. How to install such a library is beyond the scope of these
 instructions.
 
-<!---
-(It is important that the MPI library's include files, libraries, and
-executables are installed consistently. A common source of problems is
-that there are several MPI implementations available on a system, and
-that the default include file `mpi.h`, the library `libmpi.a`, and/or
-the executable `mpirun` are provided by different implementations.
-This will lead to various problems, often segfaults, since neither the
-operating system nor these libraries provide any protection against
-such a mismatch.)
--->
+`mpi-hs` uses pkg-config to find an MPI installation and supports:
 
-In some cases, the MPI library will be installed in `/usr/include`,
-`/usr/lib`, and `/usr/bin`, respectively. In this case, no further
-configuration is necessary, and `mpi-hs` will build out of the box
-with `stack build`.
+- OpenMPI via the `-fopenmpi` cabal flag (default)
+- MVAPICH via the `-fmvapich -f-openmpi` cabal flags
+- MPICH via the `-fmpich -f-openmpi` cabal flags
 
-For convenience, this package offers Cabal flags to handle several
-common cases where the MPI library is not installed in a standard
-location:
-
-- OpenMPI on Debian Linux (package `libopenmpi-dev`): use `--flag
-  mpi-hs:openmpi-debian`
-- OpenMPI on Ubuntu Linux (package `libopenmpi-dev`): use `--flag
-  mpi-hs:openmpi-ubuntu`
-- OpenMPI on macOS with MacPorts (package `openmpi`): use `--flag
-  mpi-hs:openmpi-macports`
-- MPICH on Debian Linux (package `libmpich-dev`): use `--flag
-  mpi-hs:mpich-debian`
-- MPICH on Ubuntu Linux (package `libmpich-dev`): use `--flag
-  mpi-hs:mpich-ubuntu`
-- MPICH on macOS with MacPorts (package `mpich`): use `--flag
-  mpi-hs:mpich-macports`
-
-For example, using the MPICH MPI implementation installed via MacPorts
-on macOS, you build `mpi-hs` like this:
-
-```sh
-stack build --flag mpi-hs:mpich-macports
-```
-
-In the general case, if your MPI library/operating system combination
-is not supported by a Cabal flag, you need to describe the location of
-your MPI library in `stack.yaml`. This might look like:
-
-```yaml
-extra-include-dirs:
-  - /usr/lib/openmpi/include
-extra-lib-dirs:
-  - /usr/lib/openmpi/lib
-```
-
-To remove default systems paths from the search paths, disable the
-`system-mpi` flag, which is enable by default: `--flag
-mpi-hs:-system-mpi`.
+Alternatively, `mpi-hs` can link against `-lmpi` an `mpi.h` generically, if all
+pkg-config options are disabled via `-f-openmpi -f-mpich -f-mvapich`.
+In this case you may need to specify `--extra-include-dirs` and `--extra-lib-dirs`
+and point them to your MPI installation directory.
 
 
 ### Testing the MPI installation with a C program
