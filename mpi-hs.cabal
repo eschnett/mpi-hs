@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.38.3.
 --
 -- see: https://github.com/sol/hpack
 
@@ -40,7 +40,7 @@ homepage:       https://github.com/eschnett/mpi-hs#readme
 bug-reports:    https://github.com/eschnett/mpi-hs/issues
 author:         Erik Schnetter <schnetter@gmail.com>
 maintainer:     Erik Schnetter <schnetter@gmail.com>, Phillip Seeber <phillip.seeber@googlemail.com>
-copyright:      2018, 2019, 2020, 2023, 2024 Erik Schnetter <schnetter@gmail.com>, 2024 Phillip Seeber Phillip Seeber <phillip.seeber@googlemail.com>
+copyright:      2018, 2019, 2020, 2023, 2024, 2025, 2026 Erik Schnetter <schnetter@gmail.com>, 2024, 2025, 2026 Phillip Seeber <phillip.seeber@googlemail.com>
 license:        Apache-2.0
 license-file:   LICENSE
 build-type:     Simple
@@ -63,7 +63,7 @@ flag mpich
   default: False
 
 flag mvapich
-  description: Use MVAPICH2
+  description: Use MVAPICH
   manual: True
   default: False
 
@@ -100,7 +100,7 @@ library
         ompi
   if flag(mvapich)
     pkgconfig-depends:
-        mvapich2
+        mvapich
   if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
@@ -124,7 +124,7 @@ executable example1
         ompi
   if flag(mvapich)
     pkgconfig-depends:
-        mvapich2
+        mvapich
   if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
@@ -148,7 +148,7 @@ executable example2
         ompi
   if flag(mvapich)
     pkgconfig-depends:
-        mvapich2
+        mvapich
   if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
@@ -172,7 +172,7 @@ executable version
         ompi
   if flag(mvapich)
     pkgconfig-depends:
-        mvapich2
+        mvapich
   if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
@@ -198,7 +198,7 @@ test-suite mpi-test
         ompi
   if flag(mvapich)
     pkgconfig-depends:
-        mvapich2
+        mvapich
   if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
@@ -223,7 +223,7 @@ test-suite mpi-test-storable
         ompi
   if flag(mvapich)
     pkgconfig-depends:
-        mvapich2
+        mvapich
   if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi

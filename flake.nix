@@ -32,7 +32,7 @@
             cabal-install
             cabal2nix
             haskell-language-server
-            haskellPackages.hls-fourmolu-plugin
+            # haskellPackages.hls-fourmolu-plugin
             haskellPackages.fourmolu
             hlint
             hpack
