@@ -40,7 +40,7 @@ homepage:       https://github.com/eschnett/mpi-hs#readme
 bug-reports:    https://github.com/eschnett/mpi-hs/issues
 author:         Erik Schnetter <schnetter@gmail.com>
 maintainer:     Erik Schnetter <schnetter@gmail.com>, Phillip Seeber <phillip.seeber@googlemail.com>
-copyright:      2018, 2019, 2020, 2023 Erik Schnetter <schnetter@gmail.com>
+copyright:      2018, 2019, 2020, 2023, 2024 Erik Schnetter <schnetter@gmail.com>, 2024 Phillip Seeber <phillip.seeber@googlemail.com>
 license:        Apache-2.0
 license-file:   LICENSE
 build-type:     Simple
@@ -64,6 +64,11 @@ flag mpich
 
 flag mvapich
   description: Use MVAPICH2
+  manual: True
+  default: False
+
+flag mvapich3
+  description: Use MVAPICH3
   manual: True
   default: False
 
@@ -101,7 +106,10 @@ library
   if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich3)
+    pkgconfig-depends:
+        mvapich
+  if !flag(mvapich3) && !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -125,7 +133,10 @@ executable example1
   if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich3)
+    pkgconfig-depends:
+        mvapich
+  if !flag(mvapich3) && !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -149,7 +160,10 @@ executable example2
   if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich3)
+    pkgconfig-depends:
+        mvapich
+  if !flag(mvapich3) && !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -173,7 +187,10 @@ executable version
   if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich3)
+    pkgconfig-depends:
+        mvapich
+  if !flag(mvapich3) && !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -199,7 +216,10 @@ test-suite mpi-test
   if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich3)
+    pkgconfig-depends:
+        mvapich
+  if !flag(mvapich3) && !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi
 
@@ -224,6 +244,9 @@ test-suite mpi-test-storable
   if flag(mvapich)
     pkgconfig-depends:
         mvapich2
-  if !flag(mvapich) && !flag(mpich) && !flag(openmpi)
+  if flag(mvapich3)
+    pkgconfig-depends:
+        mvapich
+  if !flag(mvapich3) && !flag(mvapich) && !flag(mpich) && !flag(openmpi)
     extra-libraries:
         mpi

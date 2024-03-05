@@ -14,25 +14,25 @@ in
 
         mpi-hs_openmpi =
           addMpiHsTestDeps
-            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-fopenmpi -f-mpich -f-mvapich" {
+            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-fopenmpi -f-mpich -f-mvapich -f-mvapich3" {
               ompi = final.mpi;
             });
 
         mpi-hs_mpich =
           addMpiHsTestDeps
-            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-f-openmpi -fmpich -f-mvapich" {
+            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-f-openmpi -fmpich -f-mvapich -f-mvapich3" {
               mpich = final.mpich;
             });
 
         mpi-hs_mvapich =
           addMpiHsTestDeps
-            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-f-openmpi -f-mpich -fmvapich" {
-              mvapich2 = final.mvapich;
+            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-f-openmpi -f-mpich -f-mvapich -fmvapich3" {
+              mvapich = final.mvapich;
             });
 
         mpi-hs_mpi =
           addMpiHsTestDeps
-            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-f-openmpi -f-mpich -f-mvapich" {
+            (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-f-openmpi -f-mpich -f-mvapich -f-mvapich3" {
               openmpi = final.mpi;
             });
       };
