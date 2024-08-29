@@ -673,14 +673,17 @@ cartCreate ::
     -- periodic. E.g. @[True, False]@ is a two-dimensional grid with the first
     -- dimension periodic and the second not.
     [Bool] ->
-    -- | Communicator for the new Cartesian topology
-    IO Comm
+    -- | Communicator for the new Cartesian topology and the number of ranks
+    -- along each axis.
+    IO (Comm, [Int])
 cartCreate comm dimPeriodictiy = do
     let nDims = length dimPeriodictiy
     Rank cmSz <- commSize comm
     withArray (replicate nDims 0) $ \dimsPtr -> do
         dimsCreatePrim cmSz nDims dimsPtr
-        cartCreatePrim comm nDims dimsPtr dimPeriodictiy False
+        comm <- cartCreatePrim comm nDims dimsPtr dimPeriodictiy False
+        newDims <- peekArray nDims dimsPtr
+        return (comm, fmap fromIntegral newDims)
 
 
 -- | Error value returned by 'getCount' if the message is too large,
