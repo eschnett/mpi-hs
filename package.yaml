@@ -4,7 +4,7 @@ github: "eschnett/mpi-hs"
 license: Apache-2.0
 author: "Erik Schnetter <schnetter@gmail.com>"
 maintainer: "Erik Schnetter <schnetter@gmail.com>, Phillip Seeber <phillip.seeber@googlemail.com>"
-copyright: "2018, 2019, 2020, 2023 Erik Schnetter <schnetter@gmail.com>"
+copyright: "2018, 2019, 2020, 2023, 2024 Erik Schnetter <schnetter@gmail.com>, 2024 Phillip Seeber <phillip.seeber@googlemail.com>"
 category: Distributed Computing
 synopsis: MPI bindings for Haskell
 description: |
@@ -44,6 +44,10 @@ flags:
     default: false
   mvapich:
     description: Use MVAPICH2
+    manual: true
+    default: false
+  mvapich3:
+    description: Use MVAPICH3
     manual: true
     default: false
   openmpi:
@@ -86,7 +90,10 @@ when:
   - condition: "flag(mvapich)"
     pkg-config-dependencies:
       - mvapich2
-  - condition: "!flag(mvapich) && !flag(mpich) && !flag(openmpi)"
+  - condition: "flag(mvapich3)"
+    pkg-config-dependencies:
+      - mvapich
+  - condition: "!flag(mvapich3) && !flag(mvapich) && !flag(mpich) && !flag(openmpi)"
     extra-libraries:
       - mpi
 

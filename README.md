@@ -111,11 +111,13 @@ instructions.
 `mpi-hs` uses pkg-config to find an MPI installation and supports:
 
 - OpenMPI via the `-fopenmpi` cabal flag (default)
-- MVAPICH via the `-fmvapich -f-openmpi` cabal flags
+- MVAPICH2 via the `-fmvapich -f-openmpi` cabal flags
+- MVAPICH3 via the `-fmvapich3 -f-openmpi` cabal flags
 - MPICH via the `-fmpich -f-openmpi` cabal flags
 
-Alternatively, `mpi-hs` can link against `-lmpi` an `mpi.h` generically, if all
-pkg-config options are disabled via `-f-openmpi -f-mpich -f-mvapich`.
+(MVAPICH2 identifies as `mvapich2` in pkg-config, but MVAPICH3 as `mvapich`).
+Alternatively, `mpi-hs` can link against `-lmpi` and `mpi.h` generically, if all
+pkg-config options are disabled via `-f-openmpi -f-mpich -f-mvapich -f-mvapich3`.
 In this case you may need to specify `--extra-include-dirs` and `--extra-lib-dirs`
 and point them to your MPI installation directory.
 
