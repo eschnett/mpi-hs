@@ -29,7 +29,7 @@
 -- MPI (the [Message Passing Interface](https://www.mpi-forum.org)) is
 -- widely used standard for distributed-memory programming on HPC
 -- (High Performance Computing) systems. MPI allows exchanging data
--- (_messages_) between programs running in parallel. There are
+-- (/messages/) between programs running in parallel. There are
 -- several high-quality open source MPI implementations (e.g. MPICH,
 -- MVAPICH, OpenMPI) as well as a variety of closed-source
 -- implementations. These libraries can typically make use of
@@ -88,7 +88,9 @@ module Control.Distributed.MPI
     Buffer(..)
 
     -- ** Communicators
-  , Comm(..)
+  , Comm
+  , withComm
+  , peekComm
   , ComparisonResult(..)
   , commCompare
   , commRank
@@ -96,6 +98,9 @@ module Control.Distributed.MPI
   , commNull
   , commSelf
   , commWorld
+
+    -- *** Cartesian Communication Grids
+  , cartCreate
 
     -- ** Message sizes
   , Count(..)
@@ -642,6 +647,43 @@ providedThreadSupport = unsafePerformIO (newIORef Nothing)
     { alloca- `Comm' peekComm*
     } -> `()'#}
 
+{#fun MPI_Dims_create as dimsCreatePrim
+    { `CInt'
+    , `Int'
+    , id `Ptr CInt'
+    } -> `()'#}
+
+withBoolArray :: [Bool] -> (Ptr CInt -> IO a) -> IO a
+withBoolArray bools f = withArray (fmap fromBool bools) f
+
+{#fun MPI_Cart_create as cartCreatePrim 
+    { withComm* %`Comm'
+    , `Int'
+    , id `Ptr CInt'
+    , withBoolArray* `[Bool]'
+    , `Bool'
+    , alloca- `Comm' peekComm*
+    } -> `()'#}
+
+-- | Create a Cartesian process topology.
+cartCreate :: 
+    -- | Communicator from which to create a Cartesian topology.
+    Comm ->
+    -- | The dimensions of the cartesian grid and whether to treat them as 
+    -- periodic. E.g. @[True, False]@ is a two-dimensional grid with the first
+    -- dimension periodic and the second not.
+    [Bool] ->
+    -- | Communicator for the new Cartesian topology and the number of ranks
+    -- along each axis.
+    IO (Comm, [Int])
+cartCreate comm dimPeriodictiy = do
+    let nDims = length dimPeriodictiy
+    Rank cmSz <- commSize comm
+    withArray (replicate nDims 0) $ \dimsPtr -> do
+        dimsCreatePrim cmSz nDims dimsPtr
+        comm <- cartCreatePrim comm nDims dimsPtr dimPeriodictiy False
+        newDims <- peekArray nDims dimsPtr
+        return (comm, fmap fromIntegral newDims)
 
 
 -- | Error value returned by 'getCount' if the message is too large,
