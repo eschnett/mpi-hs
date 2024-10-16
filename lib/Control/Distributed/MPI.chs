@@ -222,6 +222,7 @@ module Control.Distributed.MPI
   , bcast
   , exscan
   , gather
+  , gatherv
   , reduce
   , scan
   , scatter
@@ -1126,6 +1127,47 @@ gather sendbuf recvbuf root comm =
   gatherTyped (castPtr sendptr) sendcount senddatatype
               (castPtr recvptr) recvcount recvdatatype
               root comm
+
+{# fun Gatherv as gatherVTyped
+{ id `Ptr ()'
+, fromCount `Count'
+, withDatatype* %`Datatype'
+, id `Ptr ()'
+, withArray* `[CInt]'
+, withArray* `[CInt]'
+, withDatatype* %`Datatype'
+, fromRank `Rank'
+, withComm* %`Comm'
+} -> `()' return*-
+#}
+
+-- | Gather data from all processes to the root process (collective, 
+-- @[MPI_Gatherv](https://www.mpich.org/static/docs/v3.0.x/www3/MPI_Gatherv.html)@).
+-- The MPI datatypes are determined automatically from the buffer pointer types.
+gatherv :: (Buffer sb, Buffer rb) 
+  => sb 
+  -- | A list with as many elements the communicator has ('commSize'), that
+  -- specifies how many elements to receive from each of the ranks, e.g. @[1, 2, 3]@
+  -- means that the root process will receive 1 element from rank 0, 2 elements from rank 1,
+  -- and 3 elements from rank 2.
+  -> [Count]
+  -- | A list with as many elements as the communicator has ('commSize'), that specifies
+  -- the displacement in the receive buffer where the data from each rank should be placed.
+  -> [Int]
+  -- | Receive buffer. The count of elements from this buffer will be ignored in favour
+  -- of the '[Count]' argument.
+  -> rb
+  -- | Rank of the gathering process
+  -> Rank
+  -- | Communicator
+  -> Comm
+  -> IO ()
+gatherv sendbuf recvcounts displacements recvbuf root comm =
+  withPtrLenType sendbuf $ \sendptr sendcount senddatatype ->
+  withPtrLenType recvbuf $ \recvptr _ recvdatatype ->
+  gatherVTyped (castPtr sendptr) sendcount senddatatype
+               (castPtr recvptr) (fmap fromCount recvcounts) (fmap fromIntegral displacements) recvdatatype
+               root comm
 
 -- | Get the size of a message, in terms of objects of type 'Datatype'
 -- (@[MPI_Get_count](https://www.open-mpi.org/doc/current/man3/MPI_Get_count.3.php)@).

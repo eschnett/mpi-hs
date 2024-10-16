@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           mpi-hs
-version:        0.7.3.0
+version:        0.7.3.1
 synopsis:       MPI bindings for Haskell
 description:    MPI (the [Message Passinag Interface](https://www.mpi-forum.org)) is
                 a widely used standard for distributed-memory programming on HPC
@@ -40,7 +40,7 @@ homepage:       https://github.com/eschnett/mpi-hs#readme
 bug-reports:    https://github.com/eschnett/mpi-hs/issues
 author:         Erik Schnetter <schnetter@gmail.com>
 maintainer:     Erik Schnetter <schnetter@gmail.com>, Phillip Seeber <phillip.seeber@googlemail.com>
-copyright:      2018, 2019, 2020, 2023 Erik Schnetter <schnetter@gmail.com>
+copyright:      2018, 2019, 2020, 2023, 2024 Erik Schnetter <schnetter@gmail.com>, 2024 Phillip Seeber Phillip Seeber <phillip.seeber@googlemail.com>
 license:        Apache-2.0
 license-file:   LICENSE
 build-type:     Simple
