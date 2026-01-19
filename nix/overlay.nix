@@ -27,7 +27,7 @@ in
         mpi-hs_mvapich =
           addMpiHsTestDeps
             (hfinal.callCabal2nixWithOptions "mpi-hs" ../. "-f-openmpi -f-mpich -fmvapich" {
-              mvapich2 = final.mvapich;
+              mvapich = final.mvapich;
             });
 
         mpi-hs_mpi =
