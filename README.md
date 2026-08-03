@@ -115,7 +115,7 @@ instructions.
 - MPICH via the `-fmpich -f-openmpi` cabal flags
 
 Alternatively, `mpi-hs` can link against `-lmpi` and `mpi.h` generically, if all
-pkg-config options are disabled via `-f-openmpi -f-mpich -f-mvapich -f-mvapich3`.
+pkg-config options are disabled via `-f-openmpi -f-mpich -f-mvapich`.
 In this case you may need to specify `--extra-include-dirs` and `--extra-lib-dirs`
 and point them to your MPI installation directory.
 
